@@ -7,7 +7,9 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.streamlit/secrets.toml
+.mplconfig/
+.matplotlib/
+.mpl/
 
 # OS / IDE
 .DS_Store
@@ -15,11 +17,6 @@ venv/
 .vscode/
 *.log
 
-# 大体积训练/实验数据（网页用预计算结果即可）
+# 模型运行时数据（由 data.csv 重建）
 model prediction/data/
-model prediction/output/lgbm_experiments/
-model prediction/output/candidate_ab/
-model prediction/output/baseline_ab/
-model prediction/output/smoke_upgrade/
-model prediction/output/dart_candidate/
 factor exposure/data/raw/

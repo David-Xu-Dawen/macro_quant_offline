@@ -51,7 +51,7 @@ def load_price_panel(
     for asset in universe:
         path = raw_dir / f"{asset}.csv"
         if not path.exists():
-            raise FileNotFoundError(f"缺少原始数据: {path}，请先运行 fetch_akshare_data.py")
+            raise FileNotFoundError(f"缺少本地模型数据: {path}，请先运行 prepare_local_raw_data.py")
         df = pd.read_csv(path, parse_dates=["date"])[["date", "close"]].assign(asset=asset)
         frames.append(df)
 

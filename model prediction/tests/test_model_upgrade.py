@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,8 +12,45 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from black_litterman import build_view_confidence, decay_view_history  # noqa: E402
+from config import TRADE_UNIVERSE  # noqa: E402
 from macro_features import add_labels, feature_columns  # noqa: E402
 from portfolio_optimizers import cvar_weights, historical_cvar  # noqa: E402
+from prepare_local_raw_data import (  # noqa: E402
+    RAW_COLUMNS,
+    SOURCE_COLUMNS,
+    prepare_local_raw_data,
+)
+
+
+class OfflineRawDataTests(unittest.TestCase):
+    def test_prepare_local_raw_data_writes_model_schema(self):
+        dates = pd.date_range("2024-01-01", periods=3, freq="D")
+        source = pd.DataFrame({"date": dates})
+        for index, asset in enumerate(TRADE_UNIVERSE):
+            source[SOURCE_COLUMNS[asset]] = [100 + index, 101 + index, 102 + index]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            source_path = temp / "combined_close.csv"
+            raw_dir = temp / "raw"
+            source.to_csv(source_path, index=False)
+
+            summary = prepare_local_raw_data(source_path, raw_dir)
+
+            self.assertEqual(len(summary), len(TRADE_UNIVERSE))
+            for asset in TRADE_UNIVERSE:
+                raw = pd.read_csv(raw_dir / f"{asset}.csv")
+                self.assertEqual(raw.columns.tolist(), RAW_COLUMNS)
+                self.assertEqual(raw["asset"].unique().tolist(), [asset])
+                pd.testing.assert_series_equal(
+                    raw["close"], raw["open"], check_names=False
+                )
+                pd.testing.assert_series_equal(
+                    raw["close"], raw["high"], check_names=False
+                )
+                pd.testing.assert_series_equal(
+                    raw["close"], raw["low"], check_names=False
+                )
 
 
 class DynamicViewTests(unittest.TestCase):

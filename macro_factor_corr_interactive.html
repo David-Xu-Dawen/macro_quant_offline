@@ -2685,16 +2685,6 @@
           <span class="badge inline-badge" id="sampleBadge">月频样本：加载中...</span>
         </div>
         <div class="controls">
-          <label>开始
-            <select id="startMonth"></select>
-          </label>
-          <label>结束
-            <select id="endMonth"></select>
-          </label>
-          <button type="button" data-preset="all">全部</button>
-          <button type="button" data-preset="3y">近3年</button>
-          <button type="button" data-preset="2y">近2年</button>
-          <button type="button" data-preset="1y">近1年</button>
           <span class="range-status" id="rangeStatus">加载数据中...</span>
         </div>
         <table class="heatmap" id="heatmap" aria-label="宏观因子相关性热力矩阵"></table>
@@ -2711,16 +2701,6 @@
           <span class="badge inline-badge" id="sampleBadgeHf">周频样本：加载中...</span>
         </div>
         <div class="controls">
-          <label>开始
-            <select id="startWeek"></select>
-          </label>
-          <label>结束
-            <select id="endWeek"></select>
-          </label>
-          <button type="button" data-hf-preset="all">全部</button>
-          <button type="button" data-hf-preset="3y">近3年</button>
-          <button type="button" data-hf-preset="2y">近2年</button>
-          <button type="button" data-hf-preset="1y">近1年</button>
           <span class="range-status" id="rangeStatusHf">加载数据中...</span>
         </div>
         <table class="heatmap" id="heatmapHf" aria-label="高频拟合宏观因子周频相关性热力矩阵"></table>
@@ -2784,64 +2764,17 @@
           <span class="hint">非债券资产信用因子暴露按先验约束置为 0</span>
         </div>
         <div class="controls">
-          <label>滚动窗口
-            <select id="exposureRollingWeeks">
-              <option value="104">2年（104周）</option>
-              <option value="156">3年（156周）</option>
-              <option value="260">5年（260周）</option>
-              <option id="exposureFullSampleOption" value="315">全样本（按最新数据）</option>
-            </select>
-          </label>
-          <label>结束周
-            <select id="exposureEndWeek"></select>
-          </label>
-          <span class="range-status" id="exposureStatus">加载中...</span>
+          <span class="range-status" id="exposureStatus">加载最新静态暴露...</span>
         </div>
         <div class="exposure-meta" id="exposureMeta">
           <span class="chip">加载中...</span>
         </div>
         <table class="exposure-table" id="exposureTable" aria-label="资产宏观因子暴露矩阵"></table>
         <div class="note">
-          说明：表格数值为标准化 Lasso 回归系数，中位数来自滚动窗口内连续周频区间 Bootstrap。R方 为同窗口内中位系数对资产周度收益的解释度（in-sample）。正值代表资产周度收益与该宏观高频因子同向，负值代表反向，接近 0 表示该因子暴露被 Lasso 压缩或影响较弱。
+          说明：表格数值为标准化 Lasso 回归系数，中位数来自滚动窗口内连续周频区间 Bootstrap。R方为 Bootstrap 中位系数在完整滚动窗口上的稳定性调整解释度，不等同于完整窗口 OLS。正值代表资产周度收益与该宏观高频因子同向，负值代表反向，接近 0 表示该因子暴露被 Lasso 压缩或影响较弱。
         </div>
       </div>
     </section>
-  </main>
-
-  <main class="page sheet-panel" id="sheet3" data-sheet="sheet3">
-    <div class="chat-wrap">
-      <div class="chat-header">
-        <div>
-          <h1>AI 宏观助手</h1>
-          <div class="subtitle">本地 Qwen · 注入当前矩阵/暴露 · 文档检索 · 工具查 corr/exposure</div>
-        </div>
-        <div class="chat-status" id="ollamaStatus">检测 Ollama 连接中...</div>
-      </div>
-      <section class="panel chat-panel">
-        <div class="chat-tools">
-          <label>模型
-            <select id="modelSelect"></select>
-          </label>
-          <button type="button" id="clearChatBtn">清空对话</button>
-        </div>
-        <div class="quick-prompts" aria-label="快捷问题">
-          <button type="button" class="quick-prompt">解释当前最强的相关性</button>
-          <button type="button" class="quick-prompt">查一下最新因子暴露矩阵</button>
-          <button type="button" class="quick-prompt">地缘因子是怎么构造的？</button>
-          <button type="button" class="quick-prompt">为什么相关性不能当交易信号？</button>
-        </div>
-        <div class="chat-log" id="chatLog">
-          <div class="chat-msg assistant">
-            <div class="role">助手</div>
-            <div class="chat-bubble">你好，我是宏观量化助手。每次提问会自动带上当前相关矩阵与暴露摘要，并检索 README/JSON；需要精确数字时会调用 corr / exposure 工具。</div>
-          </div>
-        </div>
-        <div class="chat-input-row">
-          <textarea id="chatInput" placeholder="例如：通胀因子和汇率因子正相关时，组合该怎么对冲？"></textarea>
-          <button type="button" id="sendChatBtn">发送</button>
-        </div>
-      </section>
-    </div>
   </main>
 
   <main class="page sheet-panel" id="sheet4" data-sheet="sheet4">
@@ -2887,85 +2820,10 @@
     </div>
   </main>
 
-  <main class="page sheet-panel" id="sheet5" data-sheet="sheet5">
-    <header class="header">
-      <div>
-        <h1>多 Agent 宏观辩论</h1>
-        <div class="subtitle">4 位专家多轮讨论 · RAG / 数据工具 · 总协调人生成投研报告</div>
-      </div>
-      <div class="badge" id="debateBadge">Ollama · qwen2.5:7b</div>
-    </header>
-
-    <div class="debate-page">
-      <section class="panel debate-setup">
-        <div class="debate-setup-grid">
-          <label class="debate-field">
-            辩论议题
-            <textarea id="debateTopic" placeholder="例如：当前增长、通胀与流动性组合下，应如何制定未来一个月的大类资产配置与对冲框架？"></textarea>
-          </label>
-          <div class="debate-options">
-            <label class="debate-field">
-              关注资产（可选）
-              <input id="debateAssets" type="text" placeholder="沪深300、中债国债、沪金">
-            </label>
-            <label class="debate-field">
-              辩论轮数
-              <select id="debateRounds">
-                <option value="1">1 轮（较快）</option>
-                <option value="2" selected>2 轮（推荐）</option>
-                <option value="3">3 轮（较慢）</option>
-              </select>
-            </label>
-            <div class="debate-checks">
-              <label><input id="debateRag" type="checkbox" checked> RAG</label>
-              <label><input id="debateTools" type="checkbox" checked> 数据工具</label>
-              <label><input id="debateContext" type="checkbox" checked> 实时摘要</label>
-            </div>
-          </div>
-        </div>
-        <div class="debate-actions">
-          <button class="debate-run" type="button" id="runDebateBtn">开始辩论</button>
-          <span class="debate-status" id="debateStatus">默认 2 轮约需数分钟，请保持页面开启。</span>
-        </div>
-      </section>
-
-      <div class="debate-experts" aria-label="专家角色">
-        <div class="debate-expert"><strong>宏观基本面</strong><span>增长、通胀、利率、信用、流动性</span></div>
-        <div class="debate-expert"><strong>技术量价</strong><span>动量、趋势、波动、样本外指标</span></div>
-        <div class="debate-expert"><strong>情绪风险</strong><span>地缘、美元、黄金原油、尾部情景</span></div>
-        <div class="debate-expert"><strong>风控对冲</strong><span>暴露、风险预算、压力测试、对冲</span></div>
-      </div>
-
-      <div class="debate-results" id="debateResults">
-        <section class="panel mp-section">
-          <div class="mp-section-head">
-            <h3>专家辩论记录</h3>
-            <span class="mp-section-hint" id="debateTraceMeta"></span>
-          </div>
-          <div class="debate-turns" id="debateTurns"></div>
-        </section>
-
-        <section class="panel debate-report">
-          <div class="debate-report-head">
-            <h2>大类资产配置策略报告</h2>
-            <div class="debate-report-actions">
-              <span class="mp-section-hint" id="debateReportMeta"></span>
-              <button type="button" id="copyDebateReport">复制报告</button>
-              <button type="button" id="downloadDebateReport">下载 Markdown</button>
-            </div>
-          </div>
-          <div class="debate-markdown" id="debateReport"></div>
-        </section>
-      </div>
-    </div>
-  </main>
-
   <nav class="sheet-tabs" aria-label="工作表切换">
     <button type="button" class="sheet-tab active" data-target="sheet1">因子矩阵</button>
     <button type="button" class="sheet-tab" data-target="sheet2">因子暴露</button>
     <button type="button" class="sheet-tab" data-target="sheet4">模型预测</button>
-    <button type="button" class="sheet-tab" data-target="sheet5">Agent辩论</button>
-    <button type="button" class="sheet-tab" data-target="sheet3">AI助手</button>
   </nav>
   </div>
 
@@ -2979,6 +2837,8 @@
     let availableMonths = [];
     let hfCorr = [];
     let availableWeeks = [];
+    const FIXED_START_MONTH = "2021-01";
+    const FIXED_START_WEEK = "2021-01-01";
     let selectedCell = [1, 4];
     let selectedCellHf = [1, 4];
 
@@ -3035,47 +2895,60 @@
       badge.textContent = label;
     }
 
-    async function fetchCorr(start, end) {
-      const params = new URLSearchParams({ start, end });
-      const response = await fetch(`/api/corr?${params.toString()}`, { cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || "相关性计算失败");
+    let lfPanelSeries = null; // { label: number[] } aligned with availableMonths
+    let hfPanelSeries = null;
+
+    function pearsonCorrMatrix(seriesByLabel, periods, start, end) {
+      const labels = Object.keys(seriesByLabel);
+      const i0 = periods.indexOf(start);
+      const i1 = periods.indexOf(end);
+      if (i0 < 0 || i1 < 0 || i0 > i1) throw new Error("区间无效");
+      const cols = labels.map(lab => seriesByLabel[lab].slice(i0, i1 + 1));
+      const n = cols[0].length;
+      const rows = [];
+      for (let t = 0; t < n; t++) {
+        if (cols.every(c => c[t] != null && Number.isFinite(c[t]))) rows.push(t);
       }
-      return data;
+      if (rows.length < 3) throw new Error(`有效样本不足: ${start} ~ ${end} 仅 ${rows.length} 期`);
+      const means = cols.map(c => rows.reduce((s, t) => s + c[t], 0) / rows.length);
+      const mat = labels.map(() => labels.map(() => 1));
+      for (let a = 0; a < labels.length; a++) {
+        for (let b = a; b < labels.length; b++) {
+          let num = 0, da = 0, db = 0;
+          for (const t of rows) {
+            const xa = cols[a][t] - means[a];
+            const xb = cols[b][t] - means[b];
+            num += xa * xb; da += xa * xa; db += xb * xb;
+          }
+          const v = (da > 0 && db > 0) ? num / Math.sqrt(da * db) : 0;
+          mat[a][b] = mat[b][a] = Math.round(v * 10000) / 10000;
+        }
+      }
+      return {
+        corr: mat,
+        start: periods[i0],
+        end: periods[i1],
+        n_months: rows.length,
+        n_weeks: rows.length,
+        n_periods: rows.length,
+      };
     }
 
     async function applyRange() {
-      const start = document.getElementById("startMonth").value;
-      const end = document.getElementById("endMonth").value;
+      const start = availableMonths.find(month => month >= FIXED_START_MONTH) || availableMonths[0];
+      const end = availableMonths[availableMonths.length - 1];
       const status = document.getElementById("rangeStatus");
       if (!start || !end) return;
-      if (start > end) {
-        status.textContent = "开始月份不能晚于结束月份";
-        return;
-      }
 
       status.textContent = "计算中...";
       try {
-        const data = await fetchCorr(start, end);
+        const data = pearsonCorrMatrix(lfPanelSeries, availableMonths, start, end);
         corr = data.corr;
         updateRangeStatus(data.n_months, data.start, data.end);
         buildHeatmap();
       } catch (error) {
         status.textContent = error.message;
       }
-    }
-
-    function setPreset(preset) {
-      if (!availableMonths.length) return;
-      const endIndex = availableMonths.length - 1;
-      let startIndex = 0;
-      if (preset === "3y") startIndex = Math.max(0, endIndex - 35);
-      if (preset === "2y") startIndex = Math.max(0, endIndex - 23);
-      if (preset === "1y") startIndex = Math.max(0, endIndex - 11);
-      document.getElementById("startMonth").value = availableMonths[startIndex];
-      document.getElementById("endMonth").value = availableMonths[endIndex];
-      applyRange();
     }
 
     async function initRangeControls() {
@@ -3091,25 +2964,7 @@
 
         availableMonths = data.months || [];
         corr = data.corr || [];
-        const startSelect = document.getElementById("startMonth");
-        const endSelect = document.getElementById("endMonth");
-        startSelect.innerHTML = "";
-        endSelect.innerHTML = "";
-        availableMonths.forEach(month => {
-          startSelect.add(new Option(month, month));
-          endSelect.add(new Option(month, month));
-        });
-
-        const defaultStart = data.default_start || data.start || availableMonths[0];
-        const defaultEnd = data.default_end || data.end || availableMonths[availableMonths.length - 1];
-        startSelect.value = defaultStart;
-        endSelect.value = defaultEnd;
-        startSelect.addEventListener("change", applyRange);
-        endSelect.addEventListener("change", applyRange);
-        document.querySelectorAll("[data-preset]").forEach(button => {
-          button.addEventListener("click", () => setPreset(button.dataset.preset));
-        });
-
+        lfPanelSeries = data.series || null;
         await applyRange();
       } catch (error) {
         status.textContent = `${error.message}。请先运行 python plot_macro_factor_corr.py`;
@@ -3124,47 +2979,21 @@
       badge.textContent = label;
     }
 
-    async function fetchHfCorr(start, end) {
-      const params = new URLSearchParams({ start, end });
-      const response = await fetch(`/api/hf-corr?${params.toString()}`, { cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || "高频相关性计算失败");
-      }
-      return data;
-    }
-
     async function applyRangeHf() {
-      const start = document.getElementById("startWeek").value;
-      const end = document.getElementById("endWeek").value;
+      const start = availableWeeks.find(week => week >= FIXED_START_WEEK) || availableWeeks[0];
+      const end = availableWeeks[availableWeeks.length - 1];
       const status = document.getElementById("rangeStatusHf");
       if (!start || !end) return;
-      if (start > end) {
-        status.textContent = "开始周不能晚于结束周";
-        return;
-      }
 
       status.textContent = "计算中...";
       try {
-        const data = await fetchHfCorr(start, end);
+        const data = pearsonCorrMatrix(hfPanelSeries, availableWeeks, start, end);
         hfCorr = data.corr;
         updateRangeStatusHf(data.n_weeks || data.n_periods, data.start, data.end);
         buildHeatmapHf();
       } catch (error) {
         status.textContent = error.message;
       }
-    }
-
-    function setPresetHf(preset) {
-      if (!availableWeeks.length) return;
-      const endIndex = availableWeeks.length - 1;
-      let startIndex = 0;
-      if (preset === "3y") startIndex = Math.max(0, endIndex - 156);
-      if (preset === "2y") startIndex = Math.max(0, endIndex - 104);
-      if (preset === "1y") startIndex = Math.max(0, endIndex - 52);
-      document.getElementById("startWeek").value = availableWeeks[startIndex];
-      document.getElementById("endWeek").value = availableWeeks[endIndex];
-      applyRangeHf();
     }
 
     async function initRangeControlsHf() {
@@ -3180,25 +3009,7 @@
 
         availableWeeks = data.weeks || data.periods || [];
         hfCorr = data.corr || [];
-        const startSelect = document.getElementById("startWeek");
-        const endSelect = document.getElementById("endWeek");
-        startSelect.innerHTML = "";
-        endSelect.innerHTML = "";
-        availableWeeks.forEach(week => {
-          startSelect.add(new Option(week, week));
-          endSelect.add(new Option(week, week));
-        });
-
-        const defaultStart = data.default_start || data.start || availableWeeks[0];
-        const defaultEnd = data.default_end || data.end || availableWeeks[availableWeeks.length - 1];
-        startSelect.value = defaultStart;
-        endSelect.value = defaultEnd;
-        startSelect.addEventListener("change", applyRangeHf);
-        endSelect.addEventListener("change", applyRangeHf);
-        document.querySelectorAll("[data-hf-preset]").forEach(button => {
-          button.addEventListener("click", () => setPresetHf(button.dataset.hfPreset));
-        });
-
+        hfPanelSeries = data.series || null;
         await applyRangeHf();
       } catch (error) {
         status.textContent = `${error.message}。请先运行 python plot_macro_hf_corr.py`;
@@ -3288,15 +3099,10 @@
     }
 
     function currentCompareRange() {
-      const startMonth = document.getElementById("startMonth").value;
-      const endMonth = document.getElementById("endMonth").value;
-      if (startMonth && endMonth) return { start: startMonth, end: endMonth };
-      const startWeek = document.getElementById("startWeek").value;
-      const endWeek = document.getElementById("endWeek").value;
-      if (startWeek && endWeek) {
-        return { start: startWeek.slice(0, 7), end: endWeek.slice(0, 7) };
-      }
-      return { start: null, end: null };
+      return {
+        start: availableMonths.find(month => month >= FIXED_START_MONTH) || availableMonths[0] || null,
+        end: availableMonths[availableMonths.length - 1] || null,
+      };
     }
 
     function svgLineChart(seriesList, { yMin = null, yMax = null } = {}) {
@@ -3385,6 +3191,88 @@
       </svg>`;
     }
 
+    function corrOf(a, b) {
+      if (a.length < 3 || a.length !== b.length) return null;
+      const ma = a.reduce((s, v) => s + v, 0) / a.length;
+      const mb = b.reduce((s, v) => s + v, 0) / b.length;
+      let num = 0, da = 0, db = 0;
+      for (let i = 0; i < a.length; i++) {
+        const xa = a[i] - ma;
+        const xb = b[i] - mb;
+        num += xa * xb;
+        da += xa * xa;
+        db += xb * xb;
+      }
+      return da > 0 && db > 0 ? num / Math.sqrt(da * db) : null;
+    }
+
+    function localPairSeries(series, periods, factorA, factorB, start, end, rollingWindow) {
+      const rows = periods.map((t, i) => ({
+        t,
+        a: series?.[factorA]?.[i],
+        b: series?.[factorB]?.[i],
+      })).filter(row =>
+        row.t >= start && row.t <= end &&
+        Number.isFinite(row.a) && Number.isFinite(row.b)
+      );
+      const a = rows.map(row => row.a);
+      const b = rows.map(row => row.b);
+      const standardize = values => {
+        const mean = values.reduce((s, v) => s + v, 0) / values.length;
+        const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+        const std = Math.sqrt(variance) || 1;
+        return values.map(v => (v - mean) / std);
+      };
+      const rolling_corr = [];
+      for (let i = rollingWindow - 1; i < rows.length; i++) {
+        rolling_corr.push({
+          t: rows[i].t,
+          corr: corrOf(a.slice(i - rollingWindow + 1, i + 1), b.slice(i - rollingWindow + 1, i + 1)),
+        });
+      }
+      return {
+        n: rows.length,
+        corr: corrOf(a, b),
+        dates: rows.map(row => row.t),
+        a_z: standardize(a),
+        b_z: standardize(b),
+        rolling_corr,
+      };
+    }
+
+    function buildLocalPairData(factorA, factorB) {
+      const range = currentCompareRange();
+      const lf = localPairSeries(
+        lfPanelSeries, availableMonths, factorA, factorB,
+        range.start, range.end, 12
+      );
+      const hfStart = `${range.start}-01`;
+      const hfEnd = `${range.end}-31`;
+      const hf = localPairSeries(
+        hfPanelSeries, availableWeeks, factorA, factorB,
+        hfStart, hfEnd, 52
+      );
+      const hfMonthly = new Map();
+      hf.dates.forEach((date, i) => hfMonthly.set(date.slice(0, 7), [hf.a_z[i], hf.b_z[i]]));
+      const monthPairs = [...hfMonthly.values()];
+      const hfMonthCorr = corrOf(monthPairs.map(v => v[0]), monthPairs.map(v => v[1]));
+      return {
+        start: range.start,
+        end: range.end,
+        lf,
+        hf,
+        hf_month_end: {
+          n: monthPairs.length,
+          corr: hfMonthCorr,
+          lf_corr_same_months: lf.corr,
+        },
+        delta: {
+          hf_minus_lf: hf.corr == null || lf.corr == null ? null : hf.corr - lf.corr,
+        },
+        diagnosis: "静态模式：图表与滚动相关均由浏览器直接使用本地 JSON 计算。",
+      };
+    }
+
     async function openPairDrilldown(factorA, factorB) {
       const panel = document.getElementById("pairDrilldown");
       panel.classList.add("open");
@@ -3395,56 +3283,45 @@
       document.getElementById("chartHfSeries").innerHTML = "";
       document.getElementById("chartRolling").innerHTML = "";
 
-      const range = currentCompareRange();
-      const params = new URLSearchParams({ factor_a: factorA, factor_b: factorB });
-      if (range.start) params.set("start", range.start);
-      if (range.end) params.set("end", range.end);
+      const data = buildLocalPairData(factorA, factorB);
 
-      try {
-        const res = await fetch(`/api/corr-pair-compare?${params.toString()}`, { cache: "no-store" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "对比接口失败");
+      document.getElementById("pairHint").textContent =
+        `区间 ${data.start} ~ ${data.end} · 月频 ${data.lf.n} 个月 · 周频 ${data.hf.n} 周 · 月末抽样对齐 ${data.hf_month_end.n} 个月`;
 
-        document.getElementById("pairHint").textContent =
-          `区间 ${data.start} ~ ${data.end} · 月频 ${data.lf.n} 个月 · 周频 ${data.hf.n} 周 · 月末抽样对齐 ${data.hf_month_end.n} 个月`;
+      const chips = [
+        ["月频相关", data.lf.corr],
+        ["周频相关", data.hf.corr],
+        ["Δ(周-月)", data.delta.hf_minus_lf],
+        ["高频月末抽样相关", data.hf_month_end.corr],
+        ["同月低频相关", data.hf_month_end.lf_corr_same_months],
+      ];
+      document.getElementById("pairChips").innerHTML = chips.map(([k, v]) =>
+        `<span class="pair-chip">${k} <strong>${v == null ? "—" : (Number(v) >= 0 ? "+" : "") + Number(v).toFixed(2)}</strong></span>`
+      ).join("");
 
-        const chips = [
-          ["月频相关", data.lf.corr],
-          ["周频相关", data.hf.corr],
-          ["Δ(周-月)", data.delta.hf_minus_lf],
-          ["高频月末抽样相关", data.hf_month_end.corr],
-          ["同月低频相关", data.hf_month_end.lf_corr_same_months],
-        ];
-        document.getElementById("pairChips").innerHTML = chips.map(([k, v]) =>
-          `<span class="pair-chip">${k} <strong>${v == null ? "—" : (Number(v) >= 0 ? "+" : "") + Number(v).toFixed(2)}</strong></span>`
-        ).join("");
+      document.getElementById("pairDiagnosis").textContent = data.diagnosis;
 
-        document.getElementById("pairDiagnosis").textContent = data.diagnosis;
+      const cA = "#8b1e1e";
+      const cB = "#2563eb";
+      document.getElementById("legendLf").innerHTML =
+        `<span><i style="background:${cA}"></i>${factorA}</span><span><i style="background:${cB}"></i>${factorB}</span>`;
+      document.getElementById("legendHf").innerHTML =
+        `<span><i style="background:${cA}"></i>${factorA}</span><span><i style="background:${cB}"></i>${factorB}</span>`;
 
-        const cA = "#8b1e1e";
-        const cB = "#2563eb";
-        document.getElementById("legendLf").innerHTML =
-          `<span><i style="background:${cA}"></i>${factorA}</span><span><i style="background:${cB}"></i>${factorB}</span>`;
-        document.getElementById("legendHf").innerHTML =
-          `<span><i style="background:${cA}"></i>${factorA}</span><span><i style="background:${cB}"></i>${factorB}</span>`;
+      document.getElementById("chartLfSeries").innerHTML = svgLineChart([
+        { t: data.lf.dates, y: data.lf.a_z, color: cA },
+        { t: data.lf.dates, y: data.lf.b_z, color: cB },
+      ]);
+      document.getElementById("chartHfSeries").innerHTML = svgLineChart([
+        { t: data.hf.dates, y: data.hf.a_z, color: cA },
+        { t: data.hf.dates, y: data.hf.b_z, color: cB },
+      ]);
 
-        document.getElementById("chartLfSeries").innerHTML = svgLineChart([
-          { t: data.lf.dates, y: data.lf.a_z, color: cA },
-          { t: data.lf.dates, y: data.lf.b_z, color: cB },
-        ]);
-        document.getElementById("chartHfSeries").innerHTML = svgLineChart([
-          { t: data.hf.dates, y: data.hf.a_z, color: cA },
-          { t: data.hf.dates, y: data.hf.b_z, color: cB },
-        ]);
+      const rollLf = data.lf.rolling_corr || [];
+      const rollHf = data.hf.rolling_corr || [];
+      document.getElementById("chartRolling").innerHTML = svgRollingChart(rollLf, rollHf);
 
-        const rollLf = data.lf.rolling_corr || [];
-        const rollHf = data.hf.rolling_corr || [];
-        document.getElementById("chartRolling").innerHTML = svgRollingChart(rollLf, rollHf);
-
-        panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      } catch (err) {
-        document.getElementById("pairDiagnosis").textContent = `加载失败：${err.message}`;
-      }
+      panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
 
     function buildHeatmap() {
@@ -3625,115 +3502,20 @@
       renderExposureTable(data);
     }
 
-    async function fetchExposureWeeks(rollingWeeks) {
-      const response = await fetch(
-        `/api/factor-exposure/weeks?rolling_window_weeks=${encodeURIComponent(rollingWeeks)}`,
-        { cache: "no-store" },
-      );
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || "无法读取可选结束周列表");
-      }
-      return data;
-    }
-
-    function populateExposureEndWeeks(weeks, preferredEnd) {
-      const endSelect = document.getElementById("exposureEndWeek");
-      const previous = preferredEnd || endSelect.value;
-      endSelect.innerHTML = "";
-      weeks.forEach(week => endSelect.add(new Option(week, week)));
-      if (previous && weeks.includes(previous)) {
-        endSelect.value = previous;
-      } else if (weeks.length) {
-        endSelect.value = weeks[weeks.length - 1];
-      }
-    }
-
-    async function fetchFactorExposure(end, rollingWeeks) {
-      const params = new URLSearchParams({
-        end,
-        rolling_window_weeks: String(rollingWeeks),
-      });
-      const response = await fetch(`/api/factor-exposure?${params.toString()}`, {
-        cache: "no-store",
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || "因子暴露计算失败");
-      }
-      return data;
-    }
-
-    async function applyExposureRange() {
-      const status = document.getElementById("exposureStatus");
-      const end = document.getElementById("exposureEndWeek").value;
-      const rollingWeeks = Number(document.getElementById("exposureRollingWeeks").value);
-      if (!end) return;
-      status.textContent = "计算中，约需数秒...";
-      try {
-        const data = await fetchFactorExposure(end, rollingWeeks);
-        updateExposureUI(data);
-        status.textContent = `窗口 ${data.window_start} ~ ${data.window_end}（${data.rolling_window_weeks} 周）`;
-      } catch (error) {
-        status.textContent = error.message;
-      }
-    }
-
-    async function onExposureRollingChange() {
-      const status = document.getElementById("exposureStatus");
-      const rollingWeeks = Number(document.getElementById("exposureRollingWeeks").value);
-      const endSelect = document.getElementById("exposureEndWeek");
-      const preferredEnd = endSelect.value;
-      status.textContent = "更新可选结束周...";
-      try {
-        const weeksData = await fetchExposureWeeks(rollingWeeks);
-        populateExposureEndWeeks(weeksData.weeks || [], preferredEnd);
-        const count = weeksData.weeks?.length || 0;
-        const total = weeksData.total_weeks || count;
-        status.textContent = `可选 ${count} 个结束周（总样本 ${total} 周，窗口 ${rollingWeeks} 周）`;
-        await applyExposureRange();
-      } catch (error) {
-        status.textContent = error.message;
-      }
-    }
-
     async function initFactorExposure() {
       const badge = document.getElementById("exposureBadge");
       const meta = document.getElementById("exposureMeta");
       const status = document.getElementById("exposureStatus");
-      const rollingSelect = document.getElementById("exposureRollingWeeks");
-      const endSelect = document.getElementById("exposureEndWeek");
       try {
-        const latestResponse = await fetch("/factor_exposure_latest.json", { cache: "no-store" });
+        const latestResponse = await fetch(
+          encodeURI("/factor exposure/factor_exposure_latest.json"),
+          { cache: "no-store" },
+        );
         const latestData = await latestResponse.json();
         if (!latestResponse.ok) {
           throw new Error(latestData.detail || "无法读取 factor_exposure_latest.json");
         }
 
-        const rollingWeeks = Number(latestData.rolling_window_weeks || 260);
-        const totalWeeksHint = Number(latestData.rolling_window_weeks || rollingWeeks);
-        const fullOpt = document.getElementById("exposureFullSampleOption");
-        if (fullOpt) {
-          // 先用最新结果窗口占位；拉取可选周后再用 total_weeks 覆盖
-          fullOpt.value = String(Math.max(rollingWeeks, totalWeeksHint));
-          fullOpt.textContent = `全样本（${fullOpt.value}周）`;
-        }
-        rollingSelect.value = String(rollingWeeks);
-        if (![...rollingSelect.options].some(option => option.value === String(rollingWeeks))) {
-          rollingSelect.add(new Option(`${rollingWeeks}周（当前）`, String(rollingWeeks)));
-          rollingSelect.value = String(rollingWeeks);
-        }
-
-        const weeksData = await fetchExposureWeeks(rollingWeeks);
-        const totalWeeks = Number(weeksData.total_weeks || rollingWeeks);
-        if (fullOpt) {
-          fullOpt.value = String(totalWeeks);
-          fullOpt.textContent = `全样本（${totalWeeks}周）`;
-          // 若当前结果就是全样本窗口，保持选中
-          if (Number(latestData.rolling_window_weeks) === totalWeeks) {
-            rollingSelect.value = String(totalWeeks);
-          }
-        }
         const subtitle = document.getElementById("exposureSubtitle");
         if (subtitle) {
           subtitle.textContent =
@@ -3741,268 +3523,15 @@
             `当前结果窗口 ${latestData.rolling_window_weeks} 周` +
             `（${latestData.window_start} ~ ${latestData.window_end}），Bootstrap + Lasso`;
         }
-        populateExposureEndWeeks(
-          weeksData.weeks || [],
-          latestData.window_end || weeksData.default_end,
-        );
-
-        rollingSelect.addEventListener("change", onExposureRollingChange);
-        endSelect.addEventListener("change", applyExposureRange);
-
         updateExposureUI(latestData);
-        const count = weeksData.weeks?.length || 0;
-        status.textContent = `窗口 ${latestData.window_start} ~ ${latestData.window_end}（${latestData.rolling_window_weeks} 周，可选 ${count} 个结束周）`;
+        status.textContent =
+          `最新静态结果：${latestData.window_start} ~ ${latestData.window_end}` +
+          `（${latestData.rolling_window_weeks} 周）`;
       } catch (error) {
         badge.textContent = "暴露矩阵加载失败";
         meta.innerHTML = `<span class="chip">${error.message}。请先运行 python "factor exposure/compute_factor_exposure.py"</span>`;
         status.textContent = error.message;
       }
-    }
-
-    const chatHistory = [];
-
-    function escapeHtml(text) {
-      return String(text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    }
-
-    function appendChat(role, content) {
-      const log = document.getElementById("chatLog");
-      const div = document.createElement("div");
-      div.className = `chat-msg ${role}`;
-      div.innerHTML = `<div class="role">${role === "user" ? "你" : "助手"}</div><div class="chat-bubble">${escapeHtml(content)}</div>`;
-      log.appendChild(div);
-      log.scrollTop = log.scrollHeight;
-      return div;
-    }
-
-    async function checkOllama() {
-      const status = document.getElementById("ollamaStatus");
-      const select = document.getElementById("modelSelect");
-      try {
-        const res = await fetch("/api/health");
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || "Ollama 不可用");
-        status.textContent = `Ollama 已连接 · 默认 ${data.default_model}`;
-        status.className = "chat-status ok";
-        select.innerHTML = "";
-        (data.models || []).forEach(name => {
-          select.add(new Option(name, name, false, name === data.default_model));
-        });
-        if (!select.options.length) {
-          select.add(new Option(data.default_model, data.default_model, true, true));
-        }
-      } catch (err) {
-        status.textContent = `Ollama 未连接：${err.message}`;
-        status.className = "chat-status err";
-        select.innerHTML = "";
-        select.add(new Option("qwen2.5:7b", "qwen2.5:7b", true, true));
-      }
-    }
-
-    async function sendChat() {
-      const input = document.getElementById("chatInput");
-      const btn = document.getElementById("sendChatBtn");
-      const text = input.value.trim();
-      if (!text) return;
-
-      appendChat("user", text);
-      chatHistory.push({ role: "user", content: text });
-      input.value = "";
-      btn.disabled = true;
-      btn.textContent = "思考中";
-      const pending = appendChat("assistant", "正在检索项目资料并调用本地 Qwen...");
-
-      try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: document.getElementById("modelSelect").value,
-            messages: chatHistory,
-            use_live_context: true,
-            use_retrieval: true,
-            use_tools: true,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "请求失败");
-        chatHistory.push({ role: "assistant", content: data.content });
-        let meta = "";
-        if (data.tool_calls?.length) {
-          meta += `\n\n[工具] ${data.tool_calls.map(t => t.name).join(", ")}`;
-        }
-        if (data.retrieved?.length) {
-          meta += `\n[检索] ${data.retrieved.map(r => r.source).join(" · ")}`;
-        }
-        pending.querySelector(".chat-bubble").textContent = data.content + meta;
-      } catch (err) {
-        pending.querySelector(".chat-bubble").textContent = `出错：${err.message}。请确认已运行 python web/app.py 且 Ollama 服务已启动（默认模型 qwen2.5:7b）。`;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "发送";
-      }
-    }
-
-    function initChat() {
-      checkOllama();
-      document.getElementById("sendChatBtn").addEventListener("click", sendChat);
-      document.getElementById("chatInput").addEventListener("keydown", e => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          sendChat();
-        }
-      });
-      document.getElementById("clearChatBtn").addEventListener("click", () => {
-        chatHistory.length = 0;
-        document.getElementById("chatLog").innerHTML = `
-          <div class="chat-msg assistant">
-            <div class="role">助手</div>
-            <div class="chat-bubble">对话已清空。可以继续提问宏观因子与对冲相关问题。</div>
-          </div>`;
-      });
-      document.querySelectorAll(".quick-prompt").forEach(button => {
-        button.addEventListener("click", () => {
-          document.getElementById("chatInput").value = button.textContent.trim();
-          sendChat();
-        });
-      });
-    }
-
-    function renderDebateMarkdown(text) {
-      const inline = value => escapeHtml(value)
-        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-        .replace(/`(.+?)`/g, "<code>$1</code>");
-      return String(text || "").split("\n").map(line => {
-        const trimmed = line.trim();
-        if (!trimmed) return "<div style=\"height:8px\"></div>";
-        if (trimmed.startsWith("### ")) return `<h3>${inline(trimmed.slice(4))}</h3>`;
-        if (trimmed.startsWith("## ")) return `<h2>${inline(trimmed.slice(3))}</h2>`;
-        if (trimmed.startsWith("# ")) return `<h1>${inline(trimmed.slice(2))}</h1>`;
-        if (/^[-*]\s+/.test(trimmed)) {
-          return `<div style="padding-left:16px">• ${inline(trimmed.replace(/^[-*]\s+/, ""))}</div>`;
-        }
-        if (/^\d+\.\s+/.test(trimmed)) {
-          return `<div style="padding-left:16px">${inline(trimmed)}</div>`;
-        }
-        return `<div>${inline(line)}</div>`;
-      }).join("");
-    }
-
-    function renderDebateResult(data) {
-      const results = document.getElementById("debateResults");
-      const turnsEl = document.getElementById("debateTurns");
-      const reportEl = document.getElementById("debateReport");
-      const traceMeta = document.getElementById("debateTraceMeta");
-      const reportMeta = document.getElementById("debateReportMeta");
-      const turns = data.turns || [];
-      let lastRound = null;
-      const blocks = [];
-
-      turns.forEach(turn => {
-        if (turn.round !== lastRound) {
-          lastRound = turn.round;
-          blocks.push(`<div class="debate-round-title">第 ${turn.round} 轮</div>`);
-        }
-        const tools = (turn.tool_calls || []).map(item => item.name).join("、");
-        const sources = [...new Set(turn.sources || [])].slice(0, 4).join(" · ");
-        const meta = [
-          tools ? `工具：${tools}` : "",
-          sources ? `资料：${sources}` : "",
-          turn.error ? `异常：${turn.error}` : "",
-        ].filter(Boolean).join(" ｜ ");
-        blocks.push(`
-          <article class="debate-turn" data-expert="${escapeHtml(turn.expert)}">
-            <div class="debate-turn-head">
-              <strong>${escapeHtml(turn.expert_label)}</strong>
-              <span class="debate-turn-meta">${escapeHtml(meta || "基于共享上下文")}</span>
-            </div>
-            <div class="debate-markdown">${renderDebateMarkdown(turn.content)}</div>
-          </article>`);
-      });
-
-      turnsEl.innerHTML = blocks.join("") || `<div class="vol-empty">没有专家发言记录</div>`;
-      reportEl.innerHTML = renderDebateMarkdown(data.final_report || "协调人未生成报告。");
-      traceMeta.textContent = `${turns.length} 次发言 · ${data.rounds} 轮`;
-      reportMeta.textContent = `${data.status} · ${(Number(data.elapsed_ms || 0) / 1000).toFixed(1)} 秒`;
-      results.classList.add("open");
-      results.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-
-    async function runAgentDebate() {
-      const topicEl = document.getElementById("debateTopic");
-      const assetsEl = document.getElementById("debateAssets");
-      const roundsEl = document.getElementById("debateRounds");
-      const button = document.getElementById("runDebateBtn");
-      const status = document.getElementById("debateStatus");
-      const topic = topicEl.value.trim();
-      if (!topic) {
-        status.textContent = "请先输入辩论议题。";
-        topicEl.focus();
-        return;
-      }
-
-      const rounds = Number(roundsEl.value || 2);
-      const model = document.getElementById("modelSelect")?.value || "qwen2.5:7b";
-      button.disabled = true;
-      button.textContent = "辩论进行中";
-      status.className = "debate-status running";
-      status.textContent = `正在运行 ${rounds} 轮：4 位专家依次发言，随后生成报告，请勿关闭页面…`;
-      document.getElementById("debateResults").classList.remove("open");
-
-      try {
-        const response = await fetch("/api/debate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            topic,
-            asset_focus: assetsEl.value.trim() || null,
-            rounds,
-            model,
-            use_retrieval: document.getElementById("debateRag").checked,
-            use_tools: document.getElementById("debateTools").checked,
-            use_live_context: document.getElementById("debateContext").checked,
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || "辩论请求失败");
-        renderDebateResult(data);
-        status.textContent = data.status === "completed"
-          ? "辩论完成，报告已生成。"
-          : `辩论以 ${data.status} 状态完成，请查看异常记录。`;
-        status.className = "debate-status";
-        window.latestDebateReport = data.final_report || "";
-      } catch (error) {
-        status.textContent = `运行失败：${error.message}`;
-        status.className = "debate-status";
-      } finally {
-        button.disabled = false;
-        button.textContent = "开始辩论";
-      }
-    }
-
-    function initAgentDebate() {
-      document.getElementById("runDebateBtn").addEventListener("click", runAgentDebate);
-      document.getElementById("copyDebateReport").addEventListener("click", async () => {
-        const text = window.latestDebateReport || "";
-        if (!text) return;
-        await navigator.clipboard.writeText(text);
-        document.getElementById("debateStatus").textContent = "报告已复制到剪贴板。";
-      });
-      document.getElementById("downloadDebateReport").addEventListener("click", () => {
-        const text = window.latestDebateReport || "";
-        if (!text) return;
-        const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `macro_debate_report_${new Date().toISOString().slice(0, 10)}.md`;
-        link.click();
-        URL.revokeObjectURL(link.href);
-      });
     }
 
     async function initVolMonitor() {
@@ -4021,30 +3550,6 @@
       const selectEl = document.getElementById("volForecastFactor");
       const allEl = document.getElementById("volForecastAll");
 
-      let forecastCache = {};
-      let monitorFactors = [];
-      let forecastItems = [];
-
-      function currentRiskPct(factor) {
-        const item = monitorFactors.find(row => row.factor === factor);
-        return item?.vol_percentile == null ? null : Number(item.vol_percentile);
-      }
-
-      function forwardRiskPct(factor, detail = null) {
-        const item = forecastItems.find(row => row.factor === factor);
-        const probability = detail?.prob_high_vol ?? item?.prob_high_vol;
-        return probability == null ? null : Number(probability) * 100;
-      }
-
-      function unifiedRisk(factor, detail = null) {
-        const current = currentRiskPct(factor);
-        const forward = forwardRiskPct(factor, detail);
-        if (current == null && forward == null) return { score: null, current, forward };
-        if (current == null) return { score: forward, current, forward };
-        if (forward == null) return { score: current, current, forward };
-        return { score: (current + forward) / 2, current, forward };
-      }
-
       function unifiedRiskLevel(score) {
         if (score == null) return "数据不足";
         if (score >= 75) return "偏高";
@@ -4052,135 +3557,130 @@
         return "偏低";
       }
 
-      function renderForecast(fc) {
-        if (!fc || fc.error) {
-          forecastEl.className = "vol-forecast";
-          probEl.textContent = "—";
-          titleEl.textContent = "波动风险暂不可用";
-          textEl.textContent = (fc && fc.error) || "暂不可用";
-          metaEl.textContent = "";
-          featsEl.innerHTML = "";
-          return;
+      async function renderStaticAlert() {
+        const [hfRes, exposureRes] = await Promise.all([
+          fetch("/macro_hf_factor_corr.json", { cache: "no-store" }),
+          fetch("/factor exposure/factor_exposure_latest.json", { cache: "no-store" }),
+        ]);
+        if (!hfRes.ok) throw new Error("无法读取静态周频警报数据");
+        const hfData = await hfRes.json();
+        const exposureData = exposureRes.ok ? await exposureRes.json() : null;
+        const weeks = hfData.alert_weeks || [];
+        const alertSeries = hfData.alert_series || {};
+        if (!weeks.length || !Object.keys(alertSeries).length) {
+          throw new Error("静态 JSON 尚未包含周频警报，请重新运行更新命令");
         }
-        const factor = fc.factor || "增长因子";
-        const risk = unifiedRisk(factor, fc);
-        const score = risk.score == null ? null : Math.round(risk.score);
-        const level = unifiedRiskLevel(risk.score);
-        forecastEl.className = "vol-forecast" + ((risk.score || 0) >= 75 ? " high" : "");
-        probEl.textContent = score == null ? "—" : score + "%";
-        titleEl.textContent = `${fc.factor_label || factor} · ${level}风险`;
-        if (risk.current != null && risk.forward != null) {
-          textEl.textContent =
-            `风险评分 ${score}% = 当前历史分位 ${Math.round(risk.current)}% × 50%` +
-            ` + 未来4周高波动概率 ${Math.round(risk.forward)}% × 50%。`;
-        } else {
-          textEl.textContent = `部分组成数据缺失，当前仅显示可用指标；${fc.interpretation || ""}`;
-        }
-        const tm = fc.test_metrics || {};
-        metaEl.textContent = tm.auc != null
-          ? `样本外 AUC ${tm.auc} · 准确率 ${tm.accuracy}`
-          : (fc.note || "");
-        featsEl.innerHTML = (fc.top_features || []).slice(0, 4).map(f =>
-          `<span><i>${f.feature}</i><b>${Number(f.importance).toFixed(3)}</b></span>`
-        ).join("") || "";
-      }
 
-      async function loadFactorForecast(factor) {
-        const key = factor || "增长因子";
-        if (!forecastCache[key]) {
-          const res = await fetch(`/api/vol-forecast?factor=${encodeURIComponent(key)}`, { cache: "no-store" });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.detail || "预测失败");
-          forecastCache[key] = data;
+        const mean = values => values.reduce((s, v) => s + v, 0) / values.length;
+        const std = values => {
+          if (values.length < 2) return 0;
+          const m = mean(values);
+          return Math.sqrt(values.reduce((s, v) => s + (v - m) ** 2, 0) / (values.length - 1));
+        };
+        const rows = Object.entries(alertSeries).map(([factor, raw]) => {
+          const values = raw.map(Number).filter(Number.isFinite);
+          const rollingVol = [];
+          for (let i = 12; i < values.length; i++) {
+            rollingVol.push(std(values.slice(i - 12, i + 1)));
+          }
+          const currentVol = rollingVol[rollingVol.length - 1] || 0;
+          const percentile = rollingVol.length
+            ? 100 * rollingVol.filter(v => v <= currentVol).length / rollingVol.length
+            : 0;
+          const recent = values.slice(-52);
+          const recentStd = std(recent);
+          const latest = values[values.length - 1] || 0;
+          const z = recentStd ? (latest - mean(recent)) / recentStd : 0;
+          return { factor, vol_percentile: percentile, current_vol: currentVol, latest, shock_z: z };
+        }).sort((a, b) => b.vol_percentile - a.vol_percentile);
+
+        const maxRisk = rows[0]?.vol_percentile || 0;
+        const status = maxRisk >= 85 ? "偏高" : maxRisk >= 70 ? "留意" : "正常";
+        statusEl.textContent = status;
+        statusEl.className = "vol-status " + (status === "偏高" ? "bad" : status === "留意" ? "warn" : "ok");
+        hintEl.textContent = `截至 ${weeks[weeks.length - 1]} · 13 周波动分位 · 本周 2σ 冲击`;
+        noteEl.textContent = `静态警报：当前最高波动分位为 ${Math.round(maxRisk)}%。`;
+
+        selectEl.innerHTML = "";
+        rows.forEach(row => selectEl.add(new Option(row.factor, row.factor)));
+        const renderStaticFactor = factor => {
+          const row = rows.find(item => item.factor === factor) || rows[0];
+          const score = row?.vol_percentile ?? 0;
+          forecastEl.className = "vol-forecast" + (score >= 75 ? " high" : "");
+          probEl.textContent = `${Math.round(score)}%`;
+          titleEl.textContent = `${row.factor} · ${unifiedRiskLevel(score)}风险`;
+          textEl.textContent = `当前 13 周波动率处于历史 ${Math.round(score)}% 分位。`;
+          metaEl.textContent = "静态模式仅计算当前风险，不包含模型前瞻概率";
+          featsEl.innerHTML = `<span><i>本周变化</i><b>${row.latest.toFixed(3)}</b></span>` +
+            `<span><i>本周冲击 Z</i><b>${row.shock_z.toFixed(2)}</b></span>`;
+        };
+        selectEl.addEventListener("change", () => renderStaticFactor(selectEl.value));
+        renderStaticFactor(rows[0]?.factor);
+        allEl.textContent = "警报由本地周频因子 JSON 直接计算：13 周滚动波动率的历史分位。";
+
+        factorEl.innerHTML = rows.map(row => {
+          const score = row.vol_percentile;
+          const rowClass = score >= 75 ? "high" : score >= 55 ? "mid" : "low";
+          return `<div class="vol-row ${rowClass}">
+            <span class="name">${row.factor.replace("因子", "")}</span>
+            <div class="vol-risk-track">
+              <div class="vol-bar"><span style="width:${Math.max(6, score)}%"></span></div>
+              <div class="vol-risk-components">13周波动 ${row.current_vol.toFixed(3)}</div>
+            </div>
+            <span class="pct">${Math.round(score)}%</span>
+            <span class="lvl">${unifiedRiskLevel(score)}</span>
+          </div>`;
+        }).join("");
+
+        const shocks = rows.filter(row => Math.abs(row.shock_z) >= 2);
+        shockEl.innerHTML = shocks.length ? shocks.map((row, i) =>
+          `<div class="vol-item shock">
+            <span class="rank">${i + 1}</span>
+            <div class="main">
+              <div class="title">${row.factor.replace("因子", "")} · ${row.shock_z >= 0 ? "上行" : "下行"}</div>
+              <div class="sub">本周变化触发 2σ 阈值</div>
+            </div>
+            <span class="metric">Z ${row.shock_z.toFixed(2)}</span>
+          </div>`
+        ).join("") : `<div class="vol-empty">本周无明显冲击</div>`;
+
+        const zByFactor = Object.fromEntries(rows.map(row => [row.factor, row.shock_z]));
+        const pressures = [];
+        if (exposureData?.matrix) {
+          Object.entries(exposureData.matrix).forEach(([asset, matrix]) => {
+            let pressure = 0;
+            let topFactor = null;
+            let topValue = 0;
+            Object.entries(matrix).forEach(([factor, coef]) => {
+              const contribution = Math.abs(Number(coef) * (zByFactor[factor] || 0));
+              pressure += contribution;
+              if (contribution > topValue) {
+                topValue = contribution;
+                topFactor = factor;
+              }
+            });
+            pressures.push({ asset, pressure, top_factor: topFactor });
+          });
         }
-        renderForecast(forecastCache[key]);
-        if (selectEl.value !== key) selectEl.value = key;
+        pressures.sort((a, b) => b.pressure - a.pressure);
+        pressureEl.innerHTML = pressures.slice(0, 5).map((item, i) =>
+          `<div class="vol-item">
+            <span class="rank">${i + 1}</span>
+            <div class="main">
+              <div class="title">${item.asset}</div>
+              <div class="sub">${item.top_factor ? "主因 " + item.top_factor.replace("因子", "") : "综合压力"}</div>
+            </div>
+            <span class="metric">${item.pressure.toFixed(2)}</span>
+          </div>`
+        ).join("") || `<div class="vol-empty">暂无暴露数据</div>`;
       }
 
       try {
-        const res = await fetch("/api/vol-monitor?window=13&shock_z=2", { cache: "no-store" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "波动监控加载失败");
-
-        statusEl.textContent = data.status;
-        statusEl.className = "vol-status " + (
-          data.status === "偏高" ? "bad" : data.status === "留意" ? "warn" : "ok"
-        );
-        hintEl.textContent = `截至 ${data.as_of} · ${data.window_weeks} 周窗口 · 冲击阈值 ${data.shock_z}σ`;
-        noteEl.textContent = data.status_note;
-
-        // 先拉全部因子摘要，填充选择器
-        const allRes = await fetch("/api/vol-forecast?factor=all", { cache: "no-store" });
-        const allData = await allRes.json();
-        const items = allData.items || [];
-        monitorFactors = data.factors || [];
-        forecastItems = items;
-        selectEl.innerHTML = "";
-        (items.length ? items.map(i => i.factor) : ["增长因子", "通胀因子", "利率因子", "信用因子", "汇率因子", "地缘因子"])
-          .forEach(name => {
-            const label = items.find(i => i.factor === name)?.factor_label || name;
-            selectEl.add(new Option(label, name));
-          });
-
-        allEl.textContent = "统一口径：风险评分 = 当前波动历史分位 × 50% + 该因子未来4周高波动概率 × 50%。";
-        selectEl.addEventListener("change", () => loadFactorForecast(selectEl.value));
-
-        const defaultFactor = items[0]?.factor || "增长因子";
-        if (data.forecast && !data.forecast.error && data.forecast.factor && data.forecast.factor !== "综合") {
-          forecastCache[data.forecast.factor] = data.forecast;
-        }
-        await loadFactorForecast(defaultFactor);
-
-        factorEl.innerHTML = monitorFactors.map(f => {
-          const risk = unifiedRisk(f.factor);
-          const score = risk.score == null ? 0 : risk.score;
-          const rowClass = score >= 75 ? "high" : score >= 55 ? "mid" : "low";
-          const currentText = risk.current == null ? "—" : Math.round(risk.current) + "%";
-          const forwardText = risk.forward == null ? "—" : Math.round(risk.forward) + "%";
-          return `<div class="vol-row ${rowClass}">
-            <span class="name">${f.factor.replace("因子", "")}</span>
-            <div class="vol-risk-track">
-              <div class="vol-bar" title="风险评分 ${Math.round(score)}%"><span style="width:${Math.max(6, score)}%"></span></div>
-              <div class="vol-risk-components">当前 ${currentText} · 前瞻 ${forwardText}</div>
-            </div>
-            <span class="pct">${risk.score == null ? "—" : Math.round(risk.score) + "%"}</span>
-            <span class="lvl">${unifiedRiskLevel(risk.score)}</span>
-          </div>`;
-        }).join("") || `<div class="vol-empty">暂无因子数据</div>`;
-
-        if (data.shocks?.length) {
-          shockEl.innerHTML = data.shocks.map((s, i) =>
-            `<div class="vol-item shock">
-              <span class="rank">${i + 1}</span>
-              <div class="main">
-                <div class="title">${s.factor.replace("因子", "")} · ${s.direction}</div>
-                <div class="sub">本周变化触发冲击阈值</div>
-              </div>
-              <span class="metric">Z ${s.shock_z}</span>
-            </div>`
-          ).join("");
-        } else {
-          shockEl.innerHTML = `<div class="vol-empty">本周无明显冲击</div>`;
-        }
-
-        if (data.asset_pressure?.length) {
-          pressureEl.innerHTML = data.asset_pressure.slice(0, 5).map((a, i) =>
-            `<div class="vol-item">
-              <span class="rank">${i + 1}</span>
-              <div class="main">
-                <div class="title">${a.asset}</div>
-                <div class="sub">${a.top_factor ? "主因 " + a.top_factor.replace("因子", "") : "综合压力"}</div>
-              </div>
-              <span class="metric">${a.pressure.toFixed(2)}</span>
-            </div>`
-          ).join("");
-        } else {
-          pressureEl.innerHTML = `<div class="vol-empty">暂无暴露数据</div>`;
-        }
-      } catch (err) {
+        await renderStaticAlert();
+      } catch (error) {
         statusEl.textContent = "失败";
         statusEl.className = "vol-status bad";
-        noteEl.textContent = err.message;
+        noteEl.textContent = error.message;
       }
     }
 
@@ -4216,9 +3716,15 @@
       async function loadModelPrediction(aggression) {
         const key = aggression || "balanced";
         noteEl.textContent = "加载中...";
-        const res = await fetch(`/api/model-prediction?aggression=${encodeURIComponent(key)}`, { cache: "no-store" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "模型预测加载失败");
+        const staticRes = await fetch("/model_prediction_static.json", { cache: "no-store" });
+        if (!staticRes.ok) {
+          throw new Error("无法读取 model_prediction_static.json");
+        }
+        const staticData = await staticRes.json();
+        const data = staticData.results?.[key] || staticData.results?.[staticData.default];
+        if (!data) {
+          throw new Error(staticData.errors?.[key] || "静态模型预测尚未生成");
+        }
 
         if (aggressionEl && Array.isArray(data.profiles) && data.profiles.length) {
           const current = aggressionEl.value;
@@ -4307,8 +3813,6 @@
     initModelPrediction();
     initFactorExposure();
     initSheetTabs();
-    initChat();
-    initAgentDebate();
     document.getElementById("pairCloseBtn").addEventListener("click", () => {
       document.getElementById("pairDrilldown").classList.remove("open");
     });

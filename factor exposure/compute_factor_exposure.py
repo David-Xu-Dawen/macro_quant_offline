@@ -25,6 +25,7 @@ WEEK_FREQ = "W-FRI"
 FACTOR_LABELS = ["增长因子", "通胀因子", "利率因子", "信用因子", "汇率因子", "地缘因子", "流动性因子"]
 NON_CREDIT_FACTORS = ["增长因子", "通胀因子", "利率因子", "汇率因子", "地缘因子", "流动性因子"]
 BOND_ASSETS = {"中债国债", "中债企业债", "中证转债"}
+GEO_SOURCE_ASSETS = {"布伦特原油", "沪金"}
 
 ROLLING_WINDOW_WEEKS = 260
 SAMPLE_LENGTH_WEEKS = 104
@@ -103,7 +104,12 @@ def load_macro_weekly_mom() -> pd.DataFrame:
 
 
 def allowed_factors(asset: str) -> list[str]:
-    return FACTOR_LABELS if asset in BOND_ASSETS else NON_CREDIT_FACTORS
+    factors = FACTOR_LABELS if asset in BOND_ASSETS else NON_CREDIT_FACTORS
+    # 地缘因子本身由布伦特和沪金合成，不能再用它解释这两个资产；
+    # 否则会把“资产解释自己”的机械相关误报为高暴露和高 R²。
+    if asset in GEO_SOURCE_ASSETS:
+        factors = [factor for factor in factors if factor != "地缘因子"]
+    return factors
 
 
 def standardized_lasso_coefficients(
@@ -238,8 +244,12 @@ def compute_latest_exposure(
         "alpha_scale": alpha_scale,
         "method": "standardized Lasso coefficients, weekly rolling contiguous-block bootstrap median",
         "credit_factor_rule": "信用因子仅进入债券类资产（中债国债、中债企业债、中证转债）回归，其余资产信用因子暴露置 0",
+        "geo_factor_rule": "地缘因子由布伦特原油和沪金合成，因此不进入这两个资产自身的暴露回归",
         "bond_assets": sorted(BOND_ASSETS),
-        "r_squared_definition": "滚动窗口内标准化 Lasso 中位系数对资产周度收益的解释度（in-sample R²）",
+        "r_squared_definition": (
+            "104 周连续区间 Bootstrap 所得标准化 Lasso 中位系数，"
+            "在完整滚动窗口上的解释度；这是稳定性调整后的 R²，不等同于完整窗口直接拟合的 OLS R²"
+        ),
     }
     return exposure, r_squared, meta
 

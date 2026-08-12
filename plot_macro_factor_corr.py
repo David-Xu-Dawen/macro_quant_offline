@@ -153,9 +153,15 @@ def build_corr_payload(panel: pd.DataFrame, start: str, end: str) -> dict:
     if len(subset) < 3:
         raise ValueError(f"有效样本不足: {start} ~ {end} 仅 {len(subset)} 个月")
     corr = subset.corr(method="pearson")
+    common = panel.dropna(how="any")
+    series = {
+        label: [None if pd.isna(v) else round(float(v), 6) for v in common[label].tolist()]
+        for label in FACTOR_LABELS
+    }
     return {
         "labels": FACTOR_LABELS,
-        "months": panel.dropna(how="any").index.astype(str).tolist(),
+        "months": common.index.astype(str).tolist(),
+        "series": series,
         "start": str(subset.index.min()),
         "end": str(subset.index.max()),
         "n_months": len(subset),

@@ -108,16 +108,56 @@ def build_hf_panel() -> pd.DataFrame:
     return panel[FACTOR_LABELS]
 
 
+def build_alert_panel() -> pd.DataFrame:
+    """与因子暴露一致的周度环比/变化，用于纯静态页面的波动警报。"""
+    growth = weekly_sum(
+        read_series(ROOT / "growth" / "hf_growth_factor_synthetic.csv", "date", "hf_mom_pct")
+    )
+    inflation = weekly_last(
+        read_series(ROOT / "inflasion" / "hf_inflation_weekly.csv", "date", "hf_wow")
+    )
+    rate = weekly_sum(
+        read_series(ROOT / "interest rate" / "hf_rate_factor_daily.csv", "日期", "hf_mom_pct")
+    )
+    credit = weekly_sum(
+        read_series(ROOT / "credit" / "hf_credit_factor_daily.csv", "日期", "hf_mom_pct")
+    )
+    dxy = pd.read_csv(ROOT / "exchange" / "dxy_yahoo.csv", parse_dates=["Date"])
+    dxy["date"] = pd.to_datetime(dxy["Date"], utc=True).dt.tz_convert(None)
+    dxy_weekly = weekly_last(dxy.sort_values("date").set_index("date")["close"].astype(float))
+    exchange = np.log(dxy_weekly / dxy_weekly.shift(1)) * 100
+    geo_weekly = weekly_last(
+        read_series(ROOT / "politics" / "hf_geo_factor_synthetic.csv", "date", "hf_geo_factor")
+    )
+    politics = np.log(geo_weekly / geo_weekly.shift(1)) * 100
+    return pd.DataFrame(
+        {
+            "增长因子": growth,
+            "通胀因子": inflation,
+            "利率因子": rate,
+            "信用因子": credit,
+            "汇率因子": exchange,
+            "地缘因子": politics,
+        }
+    )[FACTOR_LABELS].dropna(how="any")
+
+
 def build_corr_payload(panel: pd.DataFrame, start: str, end: str) -> dict:
     subset = panel.loc[start:end].dropna(how="any")
     if len(subset) < 12:
         raise ValueError(f"有效样本不足: {start} ~ {end} 仅 {len(subset)} 周")
     corr = subset.corr(method="pearson")
-    periods = panel.dropna(how="any").index.strftime("%Y-%m-%d").tolist()
+    common = panel.dropna(how="any")
+    periods = common.index.strftime("%Y-%m-%d").tolist()
+    series = {
+        label: [None if pd.isna(v) else round(float(v), 6) for v in common[label].tolist()]
+        for label in FACTOR_LABELS
+    }
     return {
         "labels": FACTOR_LABELS,
         "periods": periods,
         "weeks": periods,
+        "series": series,
         "start": subset.index.min().strftime("%Y-%m-%d"),
         "end": subset.index.max().strftime("%Y-%m-%d"),
         "n_periods": len(subset),
@@ -197,6 +237,12 @@ def main() -> None:
     corr.to_csv(OUTPUT_CORR, encoding="utf-8-sig", float_format="%.4f")
 
     payload = build_corr_payload(panel, start, end)
+    alert_panel = build_alert_panel()
+    payload["alert_weeks"] = alert_panel.index.strftime("%Y-%m-%d").tolist()
+    payload["alert_series"] = {
+        label: [round(float(v), 6) for v in alert_panel[label].tolist()]
+        for label in FACTOR_LABELS
+    }
     payload["default_start"] = payload["start"]
     payload["default_end"] = payload["end"]
     OUTPUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -61,20 +61,20 @@ ASSET_CN_NAME = {
     "cbond_comp": "中债新综合",
 }
 
-# 仍保留拉数用的全量资产字典（兼容 fetch_akshare_data.py）
+# 本地模型资产元数据；价格统一由 combined_close.csv 提供。
 ASSETS = {
-    "sse50": {"cn_name": "上证50", "source": "em_index", "symbol": "sh000016", "asset_class": "equity_cn"},
-    "csi300": {"cn_name": "沪深300", "source": "em_index", "symbol": "sh000300", "asset_class": "equity_cn"},
-    "csi500": {"cn_name": "中证500", "source": "em_index", "symbol": "sh000905", "asset_class": "equity_cn"},
-    "csi1000": {"cn_name": "中证1000", "source": "em_index", "symbol": "sh000852", "asset_class": "equity_cn"},
-    "hsi": {"cn_name": "恒生指数", "source": "hk_index", "symbol": "HSI", "asset_class": "equity_hk"},
-    "bond_gov": {"cn_name": "国债指数", "source": "em_index", "symbol": "sh000012", "asset_class": "bond"},
-    "bond_corp": {"cn_name": "上证企业债指数", "source": "em_index", "symbol": "sh000013", "asset_class": "bond"},
-    "cbond_comp": {"cn_name": "中债新综合指数", "source": "cbond_comp", "symbol": "财富_总值", "asset_class": "bond"},
-    "csi_cb": {"cn_name": "中证转债", "source": "em_index", "symbol": "sh000832", "asset_class": "convertible"},
-    "crude_sc": {"cn_name": "上海原油主连", "source": "futures_sina", "symbol": "SC0", "asset_class": "commodity"},
-    "gold_au": {"cn_name": "沪金主连", "source": "futures_sina", "symbol": "AU0", "asset_class": "commodity"},
-    "spx": {"cn_name": "标普500", "source": "us_index", "symbol": ".INX", "asset_class": "equity_us"},
+    "sse50": {"cn_name": "上证50", "asset_class": "equity_cn"},
+    "csi300": {"cn_name": "沪深300", "asset_class": "equity_cn"},
+    "csi500": {"cn_name": "中证500", "asset_class": "equity_cn"},
+    "csi1000": {"cn_name": "中证1000", "asset_class": "equity_cn"},
+    "hsi": {"cn_name": "恒生指数", "asset_class": "equity_hk"},
+    "bond_gov": {"cn_name": "中债国债", "asset_class": "bond"},
+    "bond_corp": {"cn_name": "中债企业债", "asset_class": "bond"},
+    "cbond_comp": {"cn_name": "中债新综合指数", "asset_class": "bond"},
+    "csi_cb": {"cn_name": "中证转债", "asset_class": "convertible"},
+    "crude_sc": {"cn_name": "布伦特原油", "asset_class": "commodity"},
+    "gold_au": {"cn_name": "沪金", "asset_class": "commodity"},
+    "spx": {"cn_name": "标普500", "asset_class": "equity_us"},
 }
 
 # -------- LightGBM --------
