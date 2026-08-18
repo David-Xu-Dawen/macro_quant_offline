@@ -63,6 +63,18 @@ COLUMN_MAP: dict[str, str] = {
 }
 
 META_LABELS = {"指标名称", "频率", "单位", "指标ID", "来源"}
+WIND_CORNER_LABELS = {"wind", "万得", "wind资讯", "wind信息"}
+# 同比类指标偶尔真的是 0.0；价格、指数、PMI、收益率等出现 0 一律当空值。
+ALLOW_TRUE_ZERO = {
+    "m2_yoy",
+    "sf_yoy",
+    "fai_yoy",
+    "retail_yoy",
+    "export_yoy",
+    "import_yoy",
+    "cpi_yoy",
+    "ppi_yoy",
+}
 EXCEL_EPOCH = pd.Timestamp("1899-12-30")
 EXCEL_SUFFIXES = {".xlsx", ".xlsm"}
 
@@ -71,6 +83,21 @@ def _norm_text(value) -> str:
     if pd.isna(value):
         return ""
     return str(value).replace("\u3000", " ").strip()
+
+
+def _wind_numeric(values, *, allow_true_zero: bool) -> pd.Series:
+    """Wind 常把空格子导出成 0；空值必须回到 NaN，否则月末取值会拿到假 0。"""
+    series = pd.to_numeric(values, errors="coerce")
+    zeros = series.eq(0)
+    if not zeros.any():
+        return series
+    if not allow_true_zero:
+        return series.mask(zeros)
+    observed = int(series.notna().sum())
+    # 日频表上把空月份填成 0 时，0 会占绝大多数；真的 0.0 很少。
+    if observed and zeros.sum() / observed >= 0.10:
+        return series.mask(zeros)
+    return series
 
 
 def _read_csv(path: Path) -> pd.DataFrame:
@@ -82,13 +109,28 @@ def _read_csv(path: Path) -> pd.DataFrame:
     raise UnicodeError(f"无法识别 CSV 编码: {path}")
 
 
+def _is_wind_corner(value) -> bool:
+    text = _norm_text(value).lower()
+    return text in WIND_CORNER_LABELS or text.startswith("wind")
+
+
+def _row_has_mapped_series(raw: pd.DataFrame, row_idx: int) -> bool:
+    names = {_norm_text(c) for c in raw.iloc[row_idx].tolist()}
+    return any(name in names for name in COLUMN_MAP)
+
+
 def _find_header_cell(raw: pd.DataFrame) -> tuple[int, int]:
-    """Locate the Wind header cell 「指标名称」, regardless of column order."""
-    for row_idx in range(len(raw)):
+    """Locate the header row: 「指标名称」, or Windows Wind's A1 「Wind」."""
+    scan_rows = min(len(raw), 40)
+    for row_idx in range(scan_rows):
         for col_idx in range(raw.shape[1]):
             if _norm_text(raw.iat[row_idx, col_idx]) == "指标名称":
                 return int(row_idx), int(col_idx)
-    raise ValueError("找不到 Wind 表头（表格中应有一格为「指标名称」）")
+    for row_idx in range(scan_rows):
+        for col_idx in range(min(raw.shape[1], 3)):
+            if _is_wind_corner(raw.iat[row_idx, col_idx]) and _row_has_mapped_series(raw, row_idx):
+                return int(row_idx), int(col_idx)
+    raise ValueError("找不到 Wind 表头（左上角应为「指标名称」或 Windows 导出的「Wind」）")
 
 
 def _read_excel(path: Path) -> pd.DataFrame:
@@ -118,7 +160,7 @@ def wind_date_to_datetime(value) -> pd.Timestamp | pd.NaT:
         return pd.Timestamp(value)
     if isinstance(value, str):
         text = _norm_text(value)
-        if not text or text in META_LABELS or text.startswith("数据来源"):
+        if not text or text in META_LABELS or _is_wind_corner(text) or text.startswith("数据来源"):
             return pd.NaT
         parsed = pd.to_datetime(text, errors="coerce", dayfirst=False)
         if pd.isna(parsed):
@@ -166,6 +208,7 @@ def load_wind_data(path: str | Path | None = None) -> pd.DataFrame:
     data = data.loc[
         ~(
             date_text.isin(META_LABELS)
+            | date_text.map(_is_wind_corner)
             | date_text.str.startswith("数据来源")
             | date_text.isin({"", "nan", "None", "NaT"})
         )
@@ -176,7 +219,10 @@ def load_wind_data(path: str | Path | None = None) -> pd.DataFrame:
     out = pd.DataFrame({"date": data["date"].to_numpy()})
     for wind_name, short_name in COLUMN_MAP.items():
         if wind_name in data.columns:
-            out[short_name] = pd.to_numeric(data[wind_name], errors="coerce").to_numpy()
+            out[short_name] = _wind_numeric(
+                data[wind_name],
+                allow_true_zero=short_name in ALLOW_TRUE_ZERO,
+            ).to_numpy()
     return out.drop_duplicates("date", keep="last").set_index("date").sort_index()
 
 

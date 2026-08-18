@@ -53,7 +53,8 @@ python3 -m http.server 8765
 `data1.xlsx`，也可以用 `data_new.xlsx` / `data.xlsx`。Windows 上直接用 Excel 打开再保存也可以识别。
 
 第一列是日期，可以是 Excel 序列号，也可以是 `2021-01-04` 这种日期。
-表头行第一格必须是「指标名称」。后面可以保留频率、单位、指标 ID、来源。
+表头行左上角可以是「指标名称」，也可以是 Windows 终端导出常见的「Wind」。
+后面可以保留频率、单位、指标 ID、来源。
 如果 Wind 导出的是旧版 `.xls`，在 Excel 里「另存为」`.xlsx`。
 
 Windows 上 Python 命令可能是 `python` 而不是 `python3`：
