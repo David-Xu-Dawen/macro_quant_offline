@@ -19,7 +19,7 @@ import pandas as pd
 import statsmodels.api as sm
 from statsmodels.tsa.filters.hp_filter import hpfilter
 
-from load_wind_data import DEFAULT_DATA, load_wind_data
+from load_wind_data import DEFAULT_DATA, expected_wind_name, load_wind_data
 
 warnings.filterwarnings("ignore")
 
@@ -41,6 +41,46 @@ WEEKS_PER_MONTH = 4
 WEEKS_YEAR = 52
 NAV_BASE = 100.0
 LAG_RANGE = range(0, 4)
+
+FACTOR_REQUIRED = [
+    "pmi",
+    "fai_yoy",
+    "retail_yoy",
+    "export_yoy",
+    "import_yoy",
+    "cpi_yoy",
+    "ppi_yoy",
+    "国债10Y",
+    "中票AA_3Y",
+    "国开债_3Y",
+    "m2_yoy",
+    "sf_yoy",
+    "美元指数",
+    "gpr",
+    "国债净价",
+    "企债财富_3_5",
+    "国开财富_3_5",
+    "猪肉",
+    "布伦特原油",
+    "螺纹钢",
+    "恒生指数",
+    "申万房地产",
+    "沪金",
+]
+
+
+def _require_columns(df: pd.DataFrame, names: list[str]) -> None:
+    missing = []
+    for name in names:
+        if name not in df.columns or not df[name].notna().any():
+            missing.append(f"{name}（Wind 中请导出「{expected_wind_name(name)}」）")
+    if missing:
+        have = "、".join(df.columns) if len(df.columns) else "无"
+        raise ValueError(
+            "Excel 缺少必要列:\n  - "
+            + "\n  - ".join(missing)
+            + f"\n已识别列: {have}\n请在 Wind 补上这些指标后重新导出，覆盖 data1.xlsx"
+        )
 
 
 def _to_naive_datetime(series: pd.Series) -> pd.Series:
@@ -808,6 +848,7 @@ def run_all(data_path: Path) -> None:
     print(f"读取 {data_path}")
     df = load_wind_data(data_path)
     print(f"样本 {df.index.min().date()} ~ {df.index.max().date()}，{len(df)} 日，{len(df.columns)} 列")
+    _require_columns(df, FACTOR_REQUIRED)
 
     print("\n[LF]")
     build_lf_growth(df)

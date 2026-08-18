@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from pathlib import Path
 
@@ -48,8 +49,12 @@ COLUMN_MAP: dict[str, str] = {
     "中债-国开行债券总财富(3-5年)指数:收盘价(前复权)": "国开财富_3_5",
     "中债-企业债总财富(3-5年)指数:收盘价(前复权)": "企债财富_3_5",
     "中债国开债到期收益率:3年": "国开债_3Y",
+    "中债-国开债到期收益率:3年": "国开债_3Y",
+    "中债国开债到期收益率:3年:日": "国开债_3Y",
     "中债中短期票据到期收益率(AA):3年": "中票AA_3Y",
+    "中债-中短期票据到期收益率(AA):3年": "中票AA_3Y",
     "中债国债到期收益率:10年": "国债10Y",
+    "中债-国债到期收益率:10年": "国债10Y",
     "中国:平均批发价:猪肉": "猪肉",
     "中国:制造业PMI": "pmi",
     "中国:固定资产投资完成额:累计同比": "fai_yoy",
@@ -77,12 +82,96 @@ ALLOW_TRUE_ZERO = {
 }
 EXCEL_EPOCH = pd.Timestamp("1899-12-30")
 EXCEL_SUFFIXES = {".xlsx", ".xlsm"}
+FREQ_SUFFIX = re.compile(r"(:(日|周|月)|\[(日|周|月)\])$")
+# 表头不完全一致时，用关键词兜底（全部命中且只匹配到一列才采用）。
+KEYWORD_RULES: list[tuple[tuple[str, ...], str]] = [
+    (("全球", "地缘政治风险"), "gpr"),
+    (("LME", "铜"), "CAD"),
+    (("南华沪铜",), "南华沪铜"),
+    (("SHFE黄金",), "沪金"),
+    (("沪金",), "沪金"),
+    (("ICE布油",), "布伦特原油"),
+    (("布伦特",), "布伦特原油"),
+    (("SHFE螺纹钢",), "螺纹钢"),
+    (("申万", "房地产"), "申万房地产"),
+    (("国开债", "到期收益率", "3年"), "国开债_3Y"),
+    (("国开行", "到期收益率", "3年"), "国开债_3Y"),
+    (("中短期票据", "到期收益率", "3年"), "中票AA_3Y"),
+    (("国债到期收益率", "10年"), "国债10Y"),
+    (("国开行债券总财富", "3-5"), "国开财富_3_5"),
+    (("企业债总财富", "3-5"), "企债财富_3_5"),
+    (("国债总净价",), "国债净价"),
+    (("国债总财富", "总值"), "中债国债"),
+    (("企业债总财富", "总值"), "中债企业债"),
+]
+
+
+def expected_wind_name(short_name: str) -> str:
+    for wind_name, mapped in COLUMN_MAP.items():
+        if mapped == short_name:
+            return wind_name
+    return short_name
 
 
 def _norm_text(value) -> str:
     if pd.isna(value):
         return ""
     return str(value).replace("\u3000", " ").strip()
+
+
+def _normalize_header(name: str) -> str:
+    text = _norm_text(name).replace("：", ":").replace("（", "(").replace("）", ")")
+    text = re.sub(r"\s+", "", text)
+    return FREQ_SUFFIX.sub("", text)
+
+
+def _exact_short_name(header: str) -> str | None:
+    if header in COLUMN_MAP:
+        return COLUMN_MAP[header]
+    key = _normalize_header(header)
+    for wind_name, short_name in COLUMN_MAP.items():
+        if _normalize_header(wind_name) == key:
+            return short_name
+    return None
+
+
+def _keyword_short_name(header: str, taken: set[str]) -> str | None:
+    text = _normalize_header(header)
+    hits: list[str] = []
+    for keywords, short_name in KEYWORD_RULES:
+        if short_name in taken:
+            continue
+        if all(k in text for k in keywords):
+            hits.append(short_name)
+    hits = list(dict.fromkeys(hits))
+    if len(hits) == 1:
+        return hits[0]
+    return None
+
+
+def map_wind_headers(headers: list[str]) -> tuple[dict[str, str], list[str]]:
+    """返回 {原始表头: 短名}，以及未识别表头。"""
+    mapping: dict[str, str] = {}
+    taken: set[str] = set()
+    unmatched: list[str] = []
+    skip = META_LABELS | {"", "nan", "None", "date", "日期"}
+    for header in headers:
+        if not header or header in skip or _is_wind_corner(header):
+            continue
+        short = _exact_short_name(header)
+        if short:
+            mapping[header] = short
+            taken.add(short)
+    for header in headers:
+        if not header or header in skip or header in mapping or _is_wind_corner(header):
+            continue
+        short = _keyword_short_name(header, taken)
+        if short:
+            mapping[header] = short
+            taken.add(short)
+        else:
+            unmatched.append(header)
+    return mapping, unmatched
 
 
 def _wind_numeric(values, *, allow_true_zero: bool) -> pd.Series:
@@ -115,8 +204,9 @@ def _is_wind_corner(value) -> bool:
 
 
 def _row_has_mapped_series(raw: pd.DataFrame, row_idx: int) -> bool:
-    names = {_norm_text(c) for c in raw.iloc[row_idx].tolist()}
-    return any(name in names for name in COLUMN_MAP)
+    names = [_norm_text(c) for c in raw.iloc[row_idx].tolist()]
+    mapping, _ = map_wind_headers(names)
+    return bool(mapping)
 
 
 def _find_header_cell(raw: pd.DataFrame) -> tuple[int, int]:
@@ -215,14 +305,20 @@ def load_wind_data(path: str | Path | None = None) -> pd.DataFrame:
     ].copy()
     data["date"] = data[date_col].map(wind_date_to_datetime)
     data = data.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
+    if data.columns.duplicated().any():
+        data = data.loc[:, ~data.columns.duplicated()].copy()
 
+    mapping, unmatched = map_wind_headers([_norm_text(c) for c in data.columns])
     out = pd.DataFrame({"date": data["date"].to_numpy()})
-    for wind_name, short_name in COLUMN_MAP.items():
-        if wind_name in data.columns:
-            out[short_name] = _wind_numeric(
-                data[wind_name],
-                allow_true_zero=short_name in ALLOW_TRUE_ZERO,
-            ).to_numpy()
+    for wind_name, short_name in mapping.items():
+        if wind_name not in data.columns:
+            continue
+        out[short_name] = _wind_numeric(
+            data[wind_name],
+            allow_true_zero=short_name in ALLOW_TRUE_ZERO,
+        ).to_numpy()
+    if unmatched:
+        print("  未识别的 Wind 列: " + "、".join(unmatched))
     return out.drop_duplicates("date", keep="last").set_index("date").sort_index()
 
 
