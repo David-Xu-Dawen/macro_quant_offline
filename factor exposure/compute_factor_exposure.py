@@ -244,7 +244,7 @@ def compute_latest_exposure(
         "alpha_scale": alpha_scale,
         "method": "standardized Lasso coefficients, weekly rolling contiguous-block bootstrap median",
         "credit_factor_rule": "信用因子仅进入债券类资产（中债国债、中债企业债、中证转债）回归，其余资产信用因子暴露置 0",
-        "geo_factor_rule": "地缘因子由布伦特原油和沪金合成，因此不进入这两个资产自身的暴露回归",
+        "geo_factor_rule": "高频地缘由沪金和布伦特原油绝对价格拟合，因此不进入这两个资产自身的暴露回归",
         "bond_assets": sorted(BOND_ASSETS),
         "r_squared_definition": (
             "104 周连续区间 Bootstrap 所得标准化 Lasso 中位系数，"

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""用 Wind data.csv 离线更新低频/高频因子与资产面板。
+"""用 Wind data.xlsx（或 data.csv）离线更新低频/高频因子与资产面板。
 
 用法:
   python3 update_from_xlsx.py
-  python3 update_from_xlsx.py --data data.csv
+  python3 update_from_xlsx.py --data data.xlsx
 """
 
 from __future__ import annotations
@@ -356,6 +356,14 @@ def build_dxy(df: pd.DataFrame) -> None:
     _write_merged(ROOT / "exchange" / "dxy_yahoo.csv", out, "Date", ["open", "high", "low", "close", "volume"])
 
 
+def build_lf_geo(df: pd.DataFrame) -> None:
+    if "gpr" not in df.columns or not df["gpr"].notna().any():
+        raise ValueError("缺少「全球:地缘政治风险指数」，无法更新低频地缘因子")
+    gpr = monthly_last(df["gpr"])
+    out = pd.DataFrame({"date": gpr.index, "gpr": gpr.values, "geo_factor": gpr.values})
+    _write_monthly(ROOT / "politics" / "geo_factor.csv", out, ["gpr", "geo_factor"])
+
+
 # ── HF builders ───────────────────────────────────────────────────
 
 def build_hf_rate(df: pd.DataFrame) -> None:
@@ -617,36 +625,103 @@ def build_hf_mobility(df: pd.DataFrame) -> None:
 
 
 def build_hf_geo(df: pd.DataFrame) -> None:
-    meta = json.loads((ROOT / "politics" / "hf_regression_results.json").read_text(encoding="utf-8"))
-    betas = meta["betas"]
-    lags = meta["lags_months"]
-    intercept = float(meta["intercept"])
+    assets = ["沪金", "布伦特原油"]
+    missing = [c for c in assets if c not in df.columns or not df[c].notna().any()]
+    if missing:
+        raise ValueError(f"缺少高频地缘代理: {', '.join(missing)}")
+    if "gpr" not in df.columns or not df["gpr"].notna().any():
+        raise ValueError("缺少「全球:地缘政治风险指数」，无法估计黄金/石油权重")
+
     xlsx_start = df.index.min()
-    daily = df[["沪金", "布伦特原油"]].copy()
-    # 沪金使用 3 个月滞后。补入 Wind 起点前的资产历史，才能从 2021-01
-    # 开始计算地缘因子，而不是人为丢掉首个季度。
+    daily = df[assets].copy()
     asset_path = ROOT / "factor exposure" / "data" / "combined_close.csv"
     if asset_path.exists():
         history = pd.read_csv(asset_path)
         history["date"] = _to_naive_datetime(history["date"])
-        history = history.set_index("date")[["沪金", "布伦特原油"]]
-        history = history[history.index < xlsx_start]
-        daily = pd.concat([history, daily], axis=0)
+        keep_cols = [c for c in assets if c in history.columns]
+        if keep_cols:
+            history = history.set_index("date")[keep_cols]
+            history = history[history.index < xlsx_start]
+            daily = pd.concat([history, daily], axis=0)
     daily = daily.apply(pd.to_numeric, errors="coerce")
-    daily = daily[~daily.index.duplicated(keep="last")].sort_index().ffill().dropna()
+    daily = daily[~daily.index.duplicated(keep="last")].sort_index().ffill().dropna(how="any")
+
+    y = monthly_last(df["gpr"])
+    y.index = y.index.to_period("M")
+    X = daily.resample("ME").last()
+    X.index = X.index.to_period("M")
+    idx = X.dropna(how="any").index.intersection(y.dropna().index)
+    lags = {"沪金": 3, "布伦特原油": 0}
+    betas = {"沪金": 0.10918047909126594, "布伦特原油": 1.2941936309647657}
+    intercept = -27.28954659639882
+    try:
+        best, lags = search_joint_lags(y.loc[idx], X.loc[idx, assets], assets)
+        model = best["model"]
+        intercept = float(model.params.get("const", 0.0))
+        betas = {c: float(model.params[c]) for c in assets}
+        print(
+            "  地缘 HF: 金/油价格水平拟合 GPR 水平 "
+            f"R²={model.rsquared:.3f} lags={lags} "
+            f"betas={{ {', '.join(f'{k}:{v:.4f}' for k, v in betas.items())} }}"
+        )
+        meta = {
+            "lags_months": lags,
+            "weights": normalized_weights(betas),
+            "betas": betas,
+            "intercept": intercept,
+            "r_squared": float(model.rsquared),
+            "adj_r_squared": float(model.rsquared_adj),
+            "bic": float(best["bic"]),
+            "n_obs": int(best["n"]),
+            "assets": assets,
+            "y_definition": "全球地缘政治风险指数月末水平",
+            "x_definition": "沪金、布伦特原油月末绝对价格",
+        }
+        fitted = model.fittedvalues
+        monthly_fit = pd.DataFrame(
+            {
+                "ym": fitted.index.astype(str),
+                "gpr_actual": y.loc[fitted.index].values,
+                "gpr_fitted": fitted.values,
+            }
+        )
+        monthly_fit.to_csv(
+            ROOT / "politics" / "geo_fit_monthly.csv",
+            index=False,
+            encoding="utf-8-sig",
+            float_format="%.6f",
+        )
+    except Exception as exc:
+        print(f"  地缘 HF 重估失败（{exc}），改用旧水平拟合系数")
+        meta = {
+            "lags_months": lags,
+            "weights": normalized_weights(betas),
+            "betas": betas,
+            "intercept": intercept,
+            "assets": assets,
+            "fallback": str(exc),
+            "y_definition": "全球地缘政治风险指数月末水平",
+            "x_definition": "沪金、布伦特原油月末绝对价格",
+        }
+
     level = pd.Series(intercept, index=daily.index, dtype=float)
-    for col in ("沪金", "布伦特原油"):
+    for col in assets:
         level = level + betas[col] * daily[col].shift(int(lags[col]) * TRADING_DAYS_MONTH)
     level = level[level.index >= xlsx_start]
     current = daily.loc[daily.index >= xlsx_start]
     out = pd.DataFrame({"date": level.index, "hf_geo_factor": level.values})
-    _write_merged(ROOT / "politics" / "hf_geo_factor_synthetic.csv", out, "date", ["hf_geo_factor"])
+    geo_path = ROOT / "politics" / "hf_geo_factor_synthetic.csv"
+    geo_path.parent.mkdir(parents=True, exist_ok=True)
+    out.to_csv(geo_path, index=False, encoding="utf-8-sig", float_format="%.6f")
+    print(f"  → {geo_path.relative_to(ROOT)} ({len(out)} 行；金/油绝对价格线性拟合 GPR 水平)")
     _write_merged(
         ROOT / "politics" / "geo_high_freq_daily.csv",
         current.reset_index().rename(columns={"index": "date"}),
         "date",
-        ["沪金", "布伦特原油"],
+        assets,
     )
+    meta_path = ROOT / "politics" / "hf_regression_results.json"
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def build_assets(df: pd.DataFrame) -> None:
@@ -664,7 +739,10 @@ def build_assets(df: pd.DataFrame) -> None:
         "标普500",
         "美元兑人民币",
     ]
-    panel = df[cols].copy().dropna(how="all")
+    panel = df[[c for c in cols if c in df.columns]].copy().dropna(how="all")
+    missing_assets = [c for c in cols if c not in panel.columns]
+    if missing_assets:
+        print(f"  资产面板缺列，沿用历史: {', '.join(missing_assets)}")
     path = ROOT / "factor exposure" / "data" / "combined_close.csv"
     # Wind 财富指数与旧 chinabond 序列量纲常不一致。按日 merge 会交错假跳价；
     # 正确做法：xlsx 起点后整段替换，并在接缝处按旧序列水平缩放，保留 Wind 收益率。
@@ -674,23 +752,31 @@ def build_assets(df: pd.DataFrame) -> None:
         old["date"] = _to_naive_datetime(old["date"])
         old = old.dropna(subset=["date"]).set_index("date").sort_index()
         keep = old[old.index < pd.Timestamp(xlsx_start)].copy()
-        for c in cols:
+        for c in panel.columns:
             if c not in keep.columns:
                 keep[c] = pd.NA
-            if c not in panel.columns:
-                continue
             old_hist = keep[c].dropna()
             new_hist = panel[c].dropna()
             if not old_hist.empty and not new_hist.empty and abs(float(new_hist.iloc[0])) > 1e-12:
                 scale = float(old_hist.iloc[-1]) / float(new_hist.iloc[0])
-                # 仅对债指等可能换基的列缩放；股权/商品若比例接近 1 也无妨
                 if abs(scale - 1.0) > 0.02:
                     panel[c] = panel[c] * scale
                     print(f"    缩放 {c}: ×{scale:.4f}（接缝对齐）")
+        for c in missing_assets:
+            if c in old.columns:
+                panel[c] = old[c].reindex(panel.index)
+        keep = keep.reindex(columns=cols)
+        panel = panel.reindex(columns=cols)
         keep = keep.reset_index()[["date"] + cols]
         incoming = panel.reset_index().rename(columns={"index": "date"})
         out = pd.concat([keep, incoming], ignore_index=True)
         out = out.drop_duplicates("date", keep="last").sort_values("date").reset_index(drop=True)
+        if missing_assets:
+            old_full = old.reset_index().rename(columns={"index": "date"})
+            for c in missing_assets:
+                if c in old_full.columns:
+                    restored = old_full[["date", c]].dropna(subset=[c])
+                    out = out.drop(columns=[c], errors="ignore").merge(restored, on="date", how="left")
     else:
         out = panel.reset_index().rename(columns={"index": "date"})
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -730,6 +816,7 @@ def run_all(data_path: Path) -> None:
     build_lf_credit(df)
     build_lf_mobility(df)
     build_dxy(df)
+    build_lf_geo(df)
 
     print("\n[HF]")
     build_hf_rate(df)
@@ -745,8 +832,8 @@ def run_all(data_path: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="从 Wind data.csv 更新全部因子")
-    p.add_argument("--data", type=Path, default=DEFAULT_DATA, help="Wind data.csv 路径")
+    p = argparse.ArgumentParser(description="从 Wind data.xlsx 更新全部因子")
+    p.add_argument("--data", type=Path, default=DEFAULT_DATA, help="Wind data.xlsx / data.csv 路径")
     return p.parse_args()
 
 

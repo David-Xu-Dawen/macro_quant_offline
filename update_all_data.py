@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""用根目录 data.csv 完整重算离线宏观量化项目。
+"""用根目录 data.xlsx 完整重算离线宏观量化项目。
 
 用法（在项目根目录）:
   python3 update_all_data.py
@@ -8,7 +8,7 @@
   python3 update_all_data.py --continue-on-error   # 某步失败后继续
 
 阶段:
-  data      从 Wind data.csv 重建 LF/HF 因子与资产
+  data      从 Wind data.xlsx 重建 LF/HF 因子与资产
   corr      月/周频相关矩阵 JSON
   exposure  LASSO 因子暴露
   model     离线 LightGBM + BL 三档模型及静态页面数据
@@ -24,6 +24,8 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
+
+from load_wind_data import DEFAULT_DATA
 
 ROOT = Path(__file__).resolve().parent
 PYTHON = sys.executable
@@ -61,7 +63,7 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
         str(args.sample_length_weeks),
     ]
     return [
-        _step("Wind CSV 因子与资产", "", "update_from_xlsx.py", "--data", str(ROOT / "data.csv"), stage="data"),
+        _step("Wind 本地数据因子", "", "update_from_xlsx.py", "--data", str(args.data), stage="data"),
         _step("月频相关矩阵", "", "plot_macro_factor_corr.py", stage="corr"),
         _step("周频矩阵与静态警报", "", "plot_macro_hf_corr.py", stage="corr"),
         _step(
@@ -77,7 +79,13 @@ def build_steps(args: argparse.Namespace) -> list[Step]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="用 data.csv 一键重算全部离线结果")
+    parser = argparse.ArgumentParser(description="用 data.xlsx 一键重算全部离线结果")
+    parser.add_argument(
+        "--data",
+        type=Path,
+        default=DEFAULT_DATA,
+        help="Wind 导出路径，默认优先 data.xlsx",
+    )
     parser.add_argument(
         "--only",
         type=str,
@@ -147,7 +155,7 @@ def main() -> int:
         return 1
 
     print(
-        f"模式: data.csv 纯离线；将执行 {len(steps)} 步，阶段: "
+        f"模式: {args.data.name} 纯离线；将执行 {len(steps)} 步，阶段: "
         f"{', '.join(s for s in STAGES if s in stages)}"
     )
     started = time.perf_counter()

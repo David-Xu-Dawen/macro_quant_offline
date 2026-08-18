@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
-"""读取 Wind 导出的 GB18030/UTF-8 data.csv。"""
+"""读取 Wind 导出的 Excel（Windows 纯 .xlsx）或 CSV。"""
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_DATA = ROOT / "data.csv"
+DEFAULT_DATA1 = ROOT / "data1.xlsx"
+DEFAULT_NEW = ROOT / "data_new.xlsx"
+DEFAULT_XLSX = ROOT / "data.xlsx"
+DEFAULT_CSV = ROOT / "data.csv"
+if DEFAULT_DATA1.exists():
+    DEFAULT_DATA = DEFAULT_DATA1
+elif DEFAULT_NEW.exists():
+    DEFAULT_DATA = DEFAULT_NEW
+elif DEFAULT_XLSX.exists():
+    DEFAULT_DATA = DEFAULT_XLSX
+else:
+    DEFAULT_DATA = DEFAULT_CSV
 
 COLUMN_MAP: dict[str, str] = {
     "上证50指数": "上证50",
@@ -46,13 +58,23 @@ COLUMN_MAP: dict[str, str] = {
     "中国:进口金额:当月同比": "import_yoy",
     "中国:CPI:当月同比": "cpi_yoy",
     "中国:PPI:当月同比": "ppi_yoy",
+    "全球:地缘政治风险指数": "gpr",
+    "全球:地缘政治风险指数(参考十家报纸)": "gpr",
 }
 
 META_LABELS = {"指标名称", "频率", "单位", "指标ID", "来源"}
+EXCEL_EPOCH = pd.Timestamp("1899-12-30")
+EXCEL_SUFFIXES = {".xlsx", ".xlsm"}
+
+
+def _norm_text(value) -> str:
+    if pd.isna(value):
+        return ""
+    return str(value).replace("\u3000", " ").strip()
 
 
 def _read_csv(path: Path) -> pd.DataFrame:
-    for encoding in ("utf-8-sig", "gb18030"):
+    for encoding in ("utf-8-sig", "gb18030", "gbk"):
         try:
             return pd.read_csv(path, header=None, encoding=encoding)
         except UnicodeDecodeError:
@@ -60,25 +82,95 @@ def _read_csv(path: Path) -> pd.DataFrame:
     raise UnicodeError(f"无法识别 CSV 编码: {path}")
 
 
-def load_wind_data(path: str | Path = DEFAULT_DATA) -> pd.DataFrame:
-    path = Path(path)
+def _find_header_cell(raw: pd.DataFrame) -> tuple[int, int]:
+    """Locate the Wind header cell 「指标名称」, regardless of column order."""
+    for row_idx in range(len(raw)):
+        for col_idx in range(raw.shape[1]):
+            if _norm_text(raw.iat[row_idx, col_idx]) == "指标名称":
+                return int(row_idx), int(col_idx)
+    raise ValueError("找不到 Wind 表头（表格中应有一格为「指标名称」）")
+
+
+def _read_excel(path: Path) -> pd.DataFrame:
+    sheets = pd.read_excel(path, header=None, sheet_name=None, engine="openpyxl")
+    if not sheets:
+        raise ValueError(f"空 Excel 文件: {path}")
+    for frame in sheets.values():
+        if frame.empty:
+            continue
+        try:
+            _find_header_cell(frame)
+        except ValueError:
+            continue
+        return frame
+    return next(iter(sheets.values()))
+
+
+def wind_date_to_datetime(value) -> pd.Timestamp | pd.NaT:
+    if value is None or (isinstance(value, float) and pd.isna(value)) or pd.isna(value):
+        return pd.NaT
+    if isinstance(value, pd.Timestamp):
+        ts = value.tz_localize(None) if value.tzinfo else value
+        return ts.normalize()
+    if isinstance(value, datetime):
+        return pd.Timestamp(value).tz_localize(None).normalize()
+    if isinstance(value, date):
+        return pd.Timestamp(value)
+    if isinstance(value, str):
+        text = _norm_text(value)
+        if not text or text in META_LABELS or text.startswith("数据来源"):
+            return pd.NaT
+        parsed = pd.to_datetime(text, errors="coerce", dayfirst=False)
+        if pd.isna(parsed):
+            return pd.NaT
+        return parsed.tz_localize(None).normalize() if getattr(parsed, "tzinfo", None) else parsed.normalize()
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        parsed = pd.to_datetime(value, errors="coerce")
+        if pd.isna(parsed):
+            return pd.NaT
+        return parsed.tz_localize(None).normalize() if getattr(parsed, "tzinfo", None) else parsed.normalize()
+    if 20000 <= number <= 80000:
+        return (EXCEL_EPOCH + pd.to_timedelta(int(number), unit="D")).normalize()
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return pd.NaT
+    return parsed.tz_localize(None).normalize() if getattr(parsed, "tzinfo", None) else parsed.normalize()
+
+
+def load_wind_data(path: str | Path | None = None) -> pd.DataFrame:
+    path = Path(path) if path else DEFAULT_DATA
     if not path.exists():
         raise FileNotFoundError(f"找不到 Wind 数据文件: {path}")
-    if path.suffix.lower() != ".csv":
-        raise ValueError("唯一支持的输入是根目录 data.csv")
 
-    raw = _read_csv(path)
+    suffix = path.suffix.lower()
+    if suffix in EXCEL_SUFFIXES:
+        raw = _read_excel(path)
+    elif suffix == ".xls":
+        raise ValueError("请用 Excel 另存为 data.xlsx（不要用旧版 .xls）")
+    elif suffix == ".csv":
+        raw = _read_csv(path)
+    else:
+        raise ValueError("支持的输入是根目录 data.xlsx 或 data.csv")
+
     if raw.empty:
         raise ValueError(f"空文件: {path}")
-    header = [str(c).strip() if pd.notna(c) else "" for c in raw.iloc[0].tolist()]
-    data = raw.iloc[1:].copy()
+
+    header_idx, date_col_idx = _find_header_cell(raw)
+    header = [_norm_text(c) for c in raw.iloc[header_idx].tolist()]
+    data = raw.iloc[header_idx + 1 :].copy()
     data.columns = header
-    first_col = data.iloc[:, 0].astype(str)
+    date_col = header[date_col_idx]
+    date_text = data[date_col].map(_norm_text)
     data = data.loc[
-        ~(first_col.isin(META_LABELS) | first_col.str.startswith("数据来源"))
+        ~(
+            date_text.isin(META_LABELS)
+            | date_text.str.startswith("数据来源")
+            | date_text.isin({"", "nan", "None", "NaT"})
+        )
     ].copy()
-    date_col = header[0]
-    data["date"] = pd.to_datetime(data[date_col], errors="coerce")
+    data["date"] = data[date_col].map(wind_date_to_datetime)
     data = data.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
 
     out = pd.DataFrame({"date": data["date"].to_numpy()})
@@ -92,3 +184,4 @@ if __name__ == "__main__":
     frame = load_wind_data()
     print(f"rows={len(frame)} cols={len(frame.columns)}")
     print(f"range={frame.index.min().date()} ~ {frame.index.max().date()}")
+    print("columns:", ", ".join(frame.columns))

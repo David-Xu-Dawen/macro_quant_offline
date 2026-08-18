@@ -7,7 +7,7 @@
   通胀因子  inflasion/inflation_factor.csv         → inflation_factor
   利率因子  interest rate/rate_factor.csv          → rate_factor（十年国债收益率 %）
   信用因子  credit/credit_factor.csv               → credit_factor（AA中票−国开收益率利差水平，%）
-  地缘因子  politics/hf_geo_factor_synthetic.csv     → 沪金+布伦特原油绝对价格线性拟合（月末值）
+  地缘因子  politics/geo_factor.csv                  → 全球地缘政治风险指数月末值
   汇率因子  exchange/dxy_yahoo.csv                 → close 月末绝对水平
 
 运行: python plot_macro_factor_corr.py
@@ -41,6 +41,7 @@ FACTOR_PATHS = {
     "通胀因子": (ROOT / "inflasion" / "inflation_factor.csv", "date", "inflation_factor"),
     "利率因子": (ROOT / "interest rate" / "rate_factor.csv", "date", "rate_factor"),
     "信用因子": (ROOT / "credit" / "credit_factor.csv", "date", "credit_factor"),
+    "地缘因子": (ROOT / "politics" / "geo_factor.csv", "date", "geo_factor"),
 }
 
 OUTPUT_PANEL = ROOT / "macro_factor_monthly.csv"
@@ -63,13 +64,6 @@ def load_monthly_factor(path: Path, date_col: str, value_col: str) -> pd.Series:
     return monthly.dropna()
 
 
-def load_geo_monthly_level() -> pd.Series:
-    geo = pd.read_csv(ROOT / "politics" / "hf_geo_factor_synthetic.csv", parse_dates=["date"])
-    monthly = geo.sort_values("date").set_index("date")["hf_geo_factor"].astype(float).resample("ME").last()
-    monthly.index = monthly.index.to_period("M")
-    return monthly.dropna()
-
-
 def load_dxy_monthly_level() -> pd.Series:
     dxy = pd.read_csv(ROOT / "exchange" / "dxy_yahoo.csv", parse_dates=["Date"])
     dxy["date"] = pd.to_datetime(dxy["Date"], utc=True).dt.tz_convert(None)
@@ -82,7 +76,6 @@ def build_factor_panel() -> pd.DataFrame:
     series: dict[str, pd.Series] = {}
     for label, (path, date_col, value_col) in FACTOR_PATHS.items():
         series[label] = load_monthly_factor(path, date_col, value_col)
-    series["地缘因子"] = load_geo_monthly_level()
     series["汇率因子"] = load_dxy_monthly_level()
     return pd.DataFrame(series)[FACTOR_LABELS]
 
