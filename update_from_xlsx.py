@@ -21,6 +21,7 @@ from statsmodels.tsa.filters.hp_filter import hpfilter
 
 from load_wind_data import (
     DEFAULT_DATA,
+    additional_asset_path,
     expected_wind_name,
     load_additional_assets,
     load_wind_data,
@@ -829,18 +830,20 @@ def build_assets(df: pd.DataFrame) -> None:
                 if c in old_full.columns:
                     restored = old_full[["date", c]].dropna(subset=[c])
                     out = out.drop(columns=[c], errors="ignore").merge(restored, on="date", how="left")
-        # 保留旧的额外资产列（本次 additional_asset 没再给的）。
-        # 同一资产若以前留下了带「收盘价(后复权)」的长名，不要再当另一列。
+        # additional_asset 文件在的话，额外资产以这份表为准；删掉的旧列不再留在暴露图上。
         extra_keys = set(extra_names) | {pretty_asset_name(c) for c in extra_names}
-        leftover = [
+        old_extras = [
             c
             for c in old.columns
             if c not in cols
             and c not in extra_keys
             and pretty_asset_name(c) not in extra_keys
         ]
-        if leftover:
-            hist = old.reset_index().rename(columns={"index": "date"})[["date"] + leftover]
+        if additional_asset_path() is not None:
+            if old_extras:
+                print("  已按 additional_asset 去掉旧额外资产: " + "、".join(old_extras))
+        elif old_extras:
+            hist = old.reset_index().rename(columns={"index": "date"})[["date"] + old_extras]
             out = out.merge(hist, on="date", how="left")
     else:
         out = panel.reset_index().rename(columns={"index": "date"})
