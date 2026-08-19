@@ -27,6 +27,7 @@ from load_wind_data import (
     load_wind_data,
     pretty_asset_name,
 )
+from panel_config import sync_asset_factor_mask
 from paths import (
     ROOT,
     COMBINED_CLOSE,
@@ -894,6 +895,8 @@ def build_assets(df: pd.DataFrame) -> None:
     out.to_csv(path, index=False, encoding="utf-8-sig", float_format="%.6f")
     extra_msg = f"；另含额外资产 {', '.join(extra_names)}" if extra_names else ""
     print(f"  → {path.relative_to(ROOT)} ({len(out)} 行；{xlsx_start.date()} 起用 Wind 整段替换{extra_msg})")
+    asset_cols = [c for c in out.columns if str(c).strip() and str(c).strip().lower() != "date"]
+    sync_asset_factor_mask(asset_cols)
 
     raw_dir = EXPOSURE_DIR / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)

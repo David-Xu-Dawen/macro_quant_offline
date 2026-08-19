@@ -39,7 +39,7 @@ output/  →  web/macro_factor_corr_interactive.html
 
 | 文件 | 作用 | 如何得到 |
 |------|------|----------|
-| `panel_config.json` | 面板参数：热力图起点与因子名单、暴露窗口 / Lasso / Bootstrap、资产×因子回归开关 `asset_factor_mask`、波动警报阈值 | 手改。改窗口或因子名单后需重跑对应阶段；滚动相关窗和警报阈值改完刷新网页即可 |
+| `panel_config.json` | 面板参数：热力图起点与因子名单、暴露窗口 / Lasso / Bootstrap、资产×因子回归开关 `asset_factor_mask`、波动警报阈值 | 窗口、因子名单、0/1 开关手改。`asset_factor_mask` 的**行**在 data 阶段按 Excel 资产名单增删（新资产用默认开关，已有 0/1 保留）。改窗口或因子名单后需重跑对应阶段；滚动相关窗和警报阈值改完刷新网页即可 |
 
 读取逻辑在 `src/panel_config.py`。缺字段时用该文件中的默认值。
 
@@ -306,7 +306,7 @@ Excel 约定：第一行可空；从「指标名称」行起读；空值留空�
 回归开关：
 
 - `credit_only_for_bonds`：非债券默认不含信用因子。
-- `asset_factor_mask`：资产 × 因子，`1` 进入回归，`0` 不进入。未列出的资产用默认规则，**不必每加一只股票就改 JSON**。
+- `asset_factor_mask`：资产 × 因子，`1` 进入回归，`0` 不进入。跑 `update_all_data` 的 data 阶段时，矩阵行与 `data1.xlsx` + `additional_asset.xlsx` 的资产名单对齐：Excel 多了就补默认行（非债券信用因子为 0），少了就删行。已有资产的 0/1 不会被覆盖。
 - `asset_exclude_factors`：按资产剔除因子的简写；与 mask 冲突时以 mask 为准。
 
 ---
@@ -339,7 +339,7 @@ python3 -m http.server 8765
 
 ### 4.1 额外资产
 
-文件：`data/additional_asset.xlsx` 或 `.csv`，结构与 `data1` 相同。不要把额外资产写进 `data1.xlsx`。已在主表中的上证50、沪金等列若重复出现会被跳过。名称含「债」「转债」的按债券处理（默认纳入信用因子）。历史建议 3–5 年。改完后：
+`additional_asset.xlsx` 或 `.csv`，结构与 `data1` 相同。不要把额外资产写进 `data1.xlsx`。已在主表中的上证50、沪金等列若重复出现会被跳过。名称含「债」「转债」的按债券处理（默认纳入信用因子）。历史建议 3–5 年。改完后跑更新，暴露图和 `config/panel_config.json` 里的 `asset_factor_mask` 会一起增减行：
 
 ```bash
 python3 scripts/update_all_data.py --skip-model

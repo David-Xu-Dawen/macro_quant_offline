@@ -7,7 +7,7 @@ import copy
 import json
 from pathlib import Path
 
-from paths import CONFIG_PATH
+from paths import CONFIG_PATH, ROOT
 
 HEATMAP_UNIVERSE = ["增长因子", "通胀因子", "利率因子", "信用因子", "汇率因子", "地缘因子"]
 EXPOSURE_UNIVERSE = [
@@ -254,6 +254,137 @@ def build_factor_mask(
         used = set(factors_for_asset(asset, cfg, as_bond=bool(bond_flags.get(asset, False))))
         mask[str(asset)] = {factor: (1 if factor in used else 0) for factor in columns}
     return mask
+
+
+def _lookup_asset_key(mapping: dict | None, asset: str) -> str | None:
+    """找出 mapping 里对应这个资产的键，供改名时把旧开关带过去。"""
+    hit = _lookup_asset_value(mapping, asset)
+    if hit is None or not mapping:
+        return None
+    if asset in mapping:
+        return asset
+    ranked: list[tuple[int, str]] = []
+    for key in mapping:
+        name = str(key).strip()
+        if not name:
+            continue
+        if name == asset or asset.startswith(name) or name.startswith(asset):
+            ranked.append((1000 + len(name), name))
+        elif len(name) >= 2 and name in asset:
+            ranked.append((len(name), name))
+    if not ranked:
+        return None
+    ranked.sort(key=lambda item: -item[0])
+    return ranked[0][1]
+
+
+def default_mask_row(asset: str, cfg: dict | None = None) -> dict[str, int]:
+    """新资产的默认 0/1：非债券信用因子为 0，其余为 1。不读已有 mask。"""
+    cfg = copy.deepcopy(cfg or load_panel_config())
+    cfg.setdefault("exposure", {})["asset_factor_mask"] = {}
+    used = set(factors_for_asset(asset, cfg))
+    return {factor: (1 if factor in used else 0) for factor in exposure_factor_columns(cfg)}
+
+
+def _merge_mask_row(asset: str, existing, cfg: dict) -> dict[str, int]:
+    defaults = default_mask_row(asset, cfg)
+    factors = list(defaults)
+    overrides = _parse_mask_overrides(existing, factors)
+    return {factor: (1 if overrides.get(factor, bool(defaults[factor])) else 0) for factor in factors}
+
+
+def _format_asset_factor_mask(mask: dict[str, dict[str, int]], factors: list[str]) -> str:
+    if not mask:
+        return "{}"
+    names = list(mask)
+    width = max(len(f'"{name}":') for name in names)
+    lines = ["{"]
+    for i, asset in enumerate(names):
+        row = mask[asset]
+        inner = ", ".join(f'"{factor}": {int(row.get(factor, 0))}' for factor in factors)
+        pad = " " * (width - len(f'"{asset}":') + 1)
+        comma = "," if i < len(names) - 1 else ""
+        lines.append(f'      "{asset}":{pad}{{{inner}}}{comma}')
+    lines.append("    }")
+    return "\n".join(lines)
+
+
+def _dump_panel_config(raw: dict, path: Path, mask: dict[str, dict[str, int]], factors: list[str]) -> None:
+    sentinel = "__ASSET_FACTOR_MASK_BLOCK__"
+    exposure = raw.setdefault("exposure", {})
+    exposure["asset_factor_mask"] = sentinel
+    dumped = json.dumps(raw, ensure_ascii=False, indent=2)
+    dumped = dumped.replace(f'"{sentinel}"', _format_asset_factor_mask(mask, factors))
+    exposure["asset_factor_mask"] = mask
+    path.write_text(dumped + "\n", encoding="utf-8")
+
+
+def sync_asset_factor_mask(assets: list[str], path: str | Path | None = None) -> dict[str, dict[str, int]]:
+    """让 panel_config.json 的 asset_factor_mask 与当前资产名单一致。
+
+    多出来的资产按默认规则补一行；Excel 里已经没有的从矩阵删掉。
+    仍在名单里的资产保留原来的 0/1，不覆盖手工开关。
+    """
+    cfg_path = Path(path) if path else CONFIG_PATH
+    names = [str(a).strip() for a in assets if str(a).strip() and str(a).strip().lower() != "date"]
+    if not names:
+        raise ValueError("资产名单为空，无法同步 asset_factor_mask")
+
+    raw: dict = {}
+    if cfg_path.exists():
+        loaded = json.loads(cfg_path.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            raw = loaded
+    cfg = load_panel_config(cfg_path)
+    factors = exposure_factor_columns(cfg)
+    old_mask = dict((cfg.get("exposure") or {}).get("asset_factor_mask") or {})
+    if isinstance(raw.get("exposure"), dict) and isinstance(raw["exposure"].get("asset_factor_mask"), dict):
+        old_mask = dict(raw["exposure"]["asset_factor_mask"])
+
+    used_keys: set[str] = set()
+    new_mask: dict[str, dict[str, int]] = {}
+    added: list[str] = []
+    renamed: list[str] = []
+    for asset in names:
+        remaining = {key: value for key, value in old_mask.items() if key not in used_keys}
+        key = _lookup_asset_key(remaining, asset)
+        if key is None:
+            new_mask[asset] = default_mask_row(asset, cfg)
+            added.append(asset)
+            continue
+        used_keys.add(key)
+        new_mask[asset] = _merge_mask_row(asset, old_mask[key], cfg)
+        if key != asset:
+            renamed.append(f"{key} → {asset}")
+
+    removed = [key for key in old_mask if key not in used_keys]
+    already_aligned = list(old_mask) == names and all(
+        isinstance(old_mask.get(asset), dict)
+        and all(_mask_flag(old_mask[asset].get(factor)) == bool(new_mask[asset][factor]) for factor in factors)
+        for asset in names
+    )
+    if already_aligned:
+        print(f"  asset_factor_mask 已与 {len(names)} 个资产对齐，无需改写")
+        return new_mask
+
+    raw.setdefault("exposure", {})
+    raw["exposure"]["asset_factor_mask"] = new_mask
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    _dump_panel_config(raw, cfg_path, new_mask, factors)
+
+    bits: list[str] = [f"共 {len(names)} 个资产"]
+    if added:
+        bits.append("新增 " + "、".join(added))
+    if removed:
+        bits.append("移除 " + "、".join(str(x) for x in removed))
+    if renamed:
+        bits.append("改名 " + "、".join(renamed))
+    try:
+        shown = cfg_path.resolve().relative_to(ROOT)
+    except ValueError:
+        shown = cfg_path
+    print(f"  → {shown}（asset_factor_mask {'；'.join(bits)}）")
+    return new_mask
 
 
 def summarize_config(cfg: dict | None = None) -> str:
