@@ -18,15 +18,13 @@ venv/
 *.log
 .~*
 
-# 旧工程副本和重复 Wind 表，不要上传
-macro_quant 0/
-exchange/macro_quant/
+# 重复 Wind 表和一次性试算，不要上传
 data.xlsx
 data_new.xlsx
 excel.xlsx
-factor exposure/factor_exposure_custom.csv
-factor exposure/factor_exposure_custom.json
+output/exposure/factor_exposure_custom.csv
+output/exposure/factor_exposure_custom.json
 
-# 模型运行时数据（由 data.csv 重建）
-model prediction/data/
-factor exposure/data/raw/
+# 模型运行时数据（由 combined_close.csv 重建）
+output/model/data/
+output/exposure/raw/

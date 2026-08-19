@@ -9,9 +9,9 @@ from pathlib import Path
 import pandas as pd
 
 from config import ASSETS, RAW_DIR, TRADE_UNIVERSE
+from paths import COMBINED_CLOSE
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SOURCE = PROJECT_ROOT / "factor exposure" / "data" / "combined_close.csv"
+DEFAULT_SOURCE = COMBINED_CLOSE
 RAW_COLUMNS = [
     "asset",
     "cn_name",

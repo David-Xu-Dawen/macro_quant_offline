@@ -15,10 +15,22 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parent
-OUT_CSV = ROOT / "hf_factor_daily.csv"
-OUT_CHANGE_CSV = ROOT / "hf_factor_daily_change.csv"
-OUT_XLSX = ROOT / "hf_factor_daily.xlsx"
+from paths import (
+    ROOT,
+    CREDIT_DIR,
+    EXCHANGE_DIR,
+    GROWTH_DIR,
+    HF_DIR,
+    INFLATION_DIR,
+    MOBILITY_DIR,
+    POLITICS_DIR,
+    RATE_DIR,
+    ensure_output_dirs,
+)
+
+OUT_CSV = HF_DIR / "hf_factor_daily.csv"
+OUT_CHANGE_CSV = HF_DIR / "hf_factor_daily_change.csv"
+OUT_XLSX = HF_DIR / "hf_factor_daily.xlsx"
 TRADING_DAYS_MONTH = 21
 
 LEVEL_COLS = ["增长因子", "通胀因子", "利率因子", "信用因子", "汇率因子", "地缘因子", "流动性因子"]
@@ -44,8 +56,8 @@ def _read(path: Path, date_col: str, value_col: str) -> pd.Series:
 
 def _daily_inflation() -> pd.Series:
     """优先用猪肉/布油/螺纹钢日收益合成；没有日频原料时用周频净值按日填上。"""
-    weekly = _read(ROOT / "inflasion" / "hf_inflation_weekly.csv", "date", "hf_nav")
-    meta_path = ROOT / "inflasion" / "hf_regression_results.json"
+    weekly = _read(INFLATION_DIR / "hf_inflation_weekly.csv", "date", "hf_nav")
+    meta_path = INFLATION_DIR / "hf_regression_results.json"
     try:
         from load_wind_data import DEFAULT_DATA, load_wind_data
 
@@ -87,13 +99,13 @@ def _daily_inflation() -> pd.Series:
 
 
 def build_level_panel() -> pd.DataFrame:
-    growth = _read(ROOT / "growth" / "hf_growth_factor_synthetic.csv", "date", "hf_growth_factor")
+    growth = _read(GROWTH_DIR / "hf_growth_factor_synthetic.csv", "date", "hf_growth_factor")
     inflation = _daily_inflation()
-    rate = _read(ROOT / "interest rate" / "hf_rate_factor_daily.csv", "日期", "hf_level")
-    credit = _read(ROOT / "credit" / "hf_credit_factor_daily.csv", "日期", "hf_credit_factor")
-    fx = _read(ROOT / "exchange" / "dxy_yahoo.csv", "Date", "close")
-    geo = _read(ROOT / "politics" / "hf_geo_factor_synthetic.csv", "date", "hf_geo_factor")
-    liquidity = _read(ROOT / "mobility" / "hf_mobility_factor_synthetic.csv", "date", "hf_mobility_factor")
+    rate = _read(RATE_DIR / "hf_rate_factor_daily.csv", "日期", "hf_level")
+    credit = _read(CREDIT_DIR / "hf_credit_factor_daily.csv", "日期", "hf_credit_factor")
+    fx = _read(EXCHANGE_DIR / "dxy_yahoo.csv", "Date", "close")
+    geo = _read(POLITICS_DIR / "hf_geo_factor_synthetic.csv", "date", "hf_geo_factor")
+    liquidity = _read(MOBILITY_DIR / "hf_mobility_factor_synthetic.csv", "date", "hf_mobility_factor")
     panel = pd.DataFrame(
         {
             "增长因子": growth,
@@ -113,25 +125,25 @@ def build_change_panel(level: pd.DataFrame) -> pd.DataFrame:
     change = pd.DataFrame(index=level.index)
     try:
         change["增长因子"] = _read(
-            ROOT / "growth" / "hf_growth_factor_synthetic.csv", "date", "hf_mom_pct"
+            GROWTH_DIR / "hf_growth_factor_synthetic.csv", "date", "hf_mom_pct"
         )
     except FileNotFoundError:
         change["增长因子"] = np.log(level["增长因子"] / level["增长因子"].shift(1)) * 100
     try:
         change["利率因子"] = _read(
-            ROOT / "interest rate" / "hf_rate_factor_daily.csv", "日期", "hf_mom_pct"
+            RATE_DIR / "hf_rate_factor_daily.csv", "日期", "hf_mom_pct"
         )
     except FileNotFoundError:
         change["利率因子"] = np.log(level["利率因子"].abs() / level["利率因子"].abs().shift(1)) * 100
     try:
         change["信用因子"] = _read(
-            ROOT / "credit" / "hf_credit_factor_daily.csv", "日期", "hf_mom_pct"
+            CREDIT_DIR / "hf_credit_factor_daily.csv", "日期", "hf_mom_pct"
         )
     except FileNotFoundError:
         change["信用因子"] = level["信用因子"].pct_change() * 100
     try:
         change["流动性因子"] = _read(
-            ROOT / "mobility" / "hf_mobility_factor_synthetic.csv", "date", "hf_mom_pct"
+            MOBILITY_DIR / "hf_mobility_factor_synthetic.csv", "date", "hf_mom_pct"
         )
     except FileNotFoundError:
         change["流动性因子"] = np.log(level["流动性因子"] / level["流动性因子"].shift(1)) * 100
@@ -167,6 +179,7 @@ def _notes() -> pd.DataFrame:
 
 
 def export() -> None:
+    ensure_output_dirs()
     level = build_level_panel()
     change = build_change_panel(level)
     level_out = _format_dates(level)

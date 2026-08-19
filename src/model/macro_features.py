@@ -30,9 +30,10 @@ from config import (
 )
 
 CATEGORICAL_FEATURES = ["asset_id", "asset_class_id"]
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-HF_MACRO_FILE = PROJECT_ROOT / "macro_hf_factor_weekly.csv"
-LIQUIDITY_FILE = PROJECT_ROOT / "mobility" / "hf_mobility_factor_synthetic.csv"
+from paths import CORR_DIR, MOBILITY_DIR
+
+HF_MACRO_FILE = CORR_DIR / "macro_hf_factor_weekly.csv"
+LIQUIDITY_FILE = MOBILITY_DIR / "hf_mobility_factor_synthetic.csv"
 
 
 def load_price_panel(

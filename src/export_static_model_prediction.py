@@ -9,24 +9,24 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 
-ROOT = Path(__file__).resolve().parent
-MODEL_DIR = ROOT / "model prediction"
-sys.path.insert(0, str(MODEL_DIR))
+from paths import MODEL_OUT, MODEL_RUN_DIR, MODEL_SRC, ensure_output_dirs
+
+sys.path.insert(0, str(MODEL_SRC))
 
 from model_summary import list_profiles, summarize  # noqa: E402
 
-OUTPUT = ROOT / "model_prediction_static.json"
+OUTPUT = MODEL_OUT / "model_prediction_static.json"
 
 
 def static_figure_url(key: str, filename: str) -> str:
     output_dir = "output" if key == "balanced" else f"output/aggression_{key}"
-    relative = f"model prediction/{output_dir}/figures/{filename}"
+    relative = f"output/model/{output_dir}/figures/{filename}"
     return "/" + quote(relative, safe="/")
 
 
 def cleanup_model_intermediates() -> None:
     """静态摘要写出后只保留网页使用的模型图片。"""
-    output_root = MODEL_DIR / "output"
+    output_root = MODEL_RUN_DIR
     keep_dirs = {"figures", "aggression_conservative", "aggression_aggressive"}
     if not output_root.exists():
         return
@@ -49,6 +49,7 @@ def cleanup_model_intermediates() -> None:
 
 
 def main() -> None:
+    ensure_output_dirs()
     results: dict[str, dict] = {}
     errors: dict[str, str] = {}
     profiles = list_profiles()

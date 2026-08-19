@@ -2,15 +2,7 @@
 """
 六个宏观因子月度相关性热力图。
 
-因子来源：
-  增长因子  growth/raw_growth_factor.csv          → raw_growth_factor
-  通胀因子  inflasion/inflation_factor.csv         → inflation_factor
-  利率因子  interest rate/rate_factor.csv          → rate_factor（十年国债收益率 %）
-  信用因子  credit/credit_factor.csv               → credit_factor（AA中票−国开收益率利差水平，%）
-  地缘因子  politics/geo_factor.csv                  → 全球地缘政治风险指数月末值
-  汇率因子  exchange/dxy_yahoo.csv                 → close 月末绝对水平
-
-运行: python plot_macro_factor_corr.py
+因子来源在 output/factors/；结果写到 output/corr/。
 """
 
 from __future__ import annotations
@@ -26,8 +18,7 @@ import pandas as pd
 from matplotlib.colors import to_rgb
 
 from panel_config import heatmap_factors, load_panel_config
-
-ROOT = Path(__file__).parent
+from paths import CORR_DIR, EXCHANGE_DIR, GROWTH_DIR, INFLATION_DIR, CREDIT_DIR, POLITICS_DIR, RATE_DIR, ensure_output_dirs
 
 FACTOR_LABELS = [
     "增长因子",
@@ -39,17 +30,17 @@ FACTOR_LABELS = [
 ]
 
 FACTOR_PATHS = {
-    "增长因子": (ROOT / "growth" / "growth_factor.csv", "date", "raw_growth_factor"),
-    "通胀因子": (ROOT / "inflasion" / "inflation_factor.csv", "date", "inflation_factor"),
-    "利率因子": (ROOT / "interest rate" / "rate_factor.csv", "date", "rate_factor"),
-    "信用因子": (ROOT / "credit" / "credit_factor.csv", "date", "credit_factor"),
-    "地缘因子": (ROOT / "politics" / "geo_factor.csv", "date", "geo_factor"),
+    "增长因子": (GROWTH_DIR / "growth_factor.csv", "date", "raw_growth_factor"),
+    "通胀因子": (INFLATION_DIR / "inflation_factor.csv", "date", "inflation_factor"),
+    "利率因子": (RATE_DIR / "rate_factor.csv", "date", "rate_factor"),
+    "信用因子": (CREDIT_DIR / "credit_factor.csv", "date", "credit_factor"),
+    "地缘因子": (POLITICS_DIR / "geo_factor.csv", "date", "geo_factor"),
 }
 
-OUTPUT_PANEL = ROOT / "macro_factor_monthly.csv"
-OUTPUT_CORR = ROOT / "macro_factor_corr.csv"
-OUTPUT_JSON = ROOT / "macro_factor_corr.json"
-OUTPUT_PNG = ROOT / "macro_factor_corr_heatmap.png"
+OUTPUT_PANEL = CORR_DIR / "macro_factor_monthly.csv"
+OUTPUT_CORR = CORR_DIR / "macro_factor_corr.csv"
+OUTPUT_JSON = CORR_DIR / "macro_factor_corr.json"
+OUTPUT_PNG = CORR_DIR / "macro_factor_corr_heatmap.png"
 SAMPLE_START = "2021-01"
 
 
@@ -67,7 +58,7 @@ def load_monthly_factor(path: Path, date_col: str, value_col: str) -> pd.Series:
 
 
 def load_dxy_monthly_level() -> pd.Series:
-    dxy = pd.read_csv(ROOT / "exchange" / "dxy_yahoo.csv", parse_dates=["Date"])
+    dxy = pd.read_csv(EXCHANGE_DIR / "dxy_yahoo.csv", parse_dates=["Date"])
     dxy["date"] = pd.to_datetime(dxy["Date"], utc=True).dt.tz_convert(None)
     monthly = dxy.set_index("date")["close"].resample("ME").last()
     monthly.index = monthly.index.to_period("M")
@@ -165,6 +156,7 @@ def build_corr_payload(panel: pd.DataFrame, start: str, end: str, labels: list[s
 
 
 def main() -> None:
+    ensure_output_dirs()
     cfg = load_panel_config()
     hm = cfg["heatmap"]
     labels = heatmap_factors(cfg)

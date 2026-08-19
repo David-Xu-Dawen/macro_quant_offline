@@ -4221,7 +4221,14 @@
         "汇率因子",
         "地缘因子"
       ],
-      "include_factors": [],
+      "include_factors": [
+        "增长因子",
+        "通胀因子",
+        "利率因子",
+        "信用因子",
+        "汇率因子",
+        "地缘因子"
+      ],
       "exclude_factors": [],
       "rolling_corr_months": 12,
       "rolling_corr_weeks": 52,

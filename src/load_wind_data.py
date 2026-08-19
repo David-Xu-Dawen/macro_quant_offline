@@ -9,19 +9,9 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parent
-DEFAULT_DATA1 = ROOT / "data1.xlsx"
-DEFAULT_NEW = ROOT / "data_new.xlsx"
-DEFAULT_XLSX = ROOT / "data.xlsx"
-DEFAULT_CSV = ROOT / "data.csv"
-if DEFAULT_DATA1.exists():
-    DEFAULT_DATA = DEFAULT_DATA1
-elif DEFAULT_NEW.exists():
-    DEFAULT_DATA = DEFAULT_NEW
-elif DEFAULT_XLSX.exists():
-    DEFAULT_DATA = DEFAULT_XLSX
-else:
-    DEFAULT_DATA = DEFAULT_CSV
+from paths import additional_asset_path, default_wind_data
+
+DEFAULT_DATA = default_wind_data()
 
 COLUMN_MAP: dict[str, str] = {
     "上证50指数": "上证50",
@@ -118,14 +108,6 @@ SKIP_AS_EXTRA_ASSET = CORE_EXPOSURE_ASSETS | {
     "申万大盘市盈率",
     "申万小盘市盈率",
 }
-
-
-def additional_asset_path() -> Path | None:
-    for name in ("additional_asset.xlsx", "additional_asset.xlsm", "additional_asset.csv"):
-        path = ROOT / name
-        if path.exists():
-            return path
-    return None
 
 
 def pretty_asset_name(header: str) -> str:

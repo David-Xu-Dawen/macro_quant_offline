@@ -21,8 +21,9 @@ plt.rcParams["savefig.dpi"] = 160
 plt.rcParams["axes.spines.top"] = False
 plt.rcParams["axes.spines.right"] = False
 
-ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "output"
+from config import OUTPUT_DIR
+
+OUT = OUTPUT_DIR
 FIG = OUT / "figures"
 
 ASSET_CN = {

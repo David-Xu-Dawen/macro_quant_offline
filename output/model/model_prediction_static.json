@@ -384,13 +384,13 @@
           "file": "01_nav_curve.png",
           "title": "净值曲线",
           "desc": "策略 vs 等权 vs 国债",
-          "url": "/model%20prediction/output/aggression_conservative/figures/01_nav_curve.png"
+          "url": "/output/model/output/aggression_conservative/figures/01_nav_curve.png"
         },
         {
           "file": "02_drawdown.png",
           "title": "策略回撤",
           "desc": "策略最大回撤轨迹",
-          "url": "/model%20prediction/output/aggression_conservative/figures/02_drawdown.png"
+          "url": "/output/model/output/aggression_conservative/figures/02_drawdown.png"
         }
       ],
       "note": "激进程度=稳健（上限30%，CVaR厌恶6.0，优化器=cvar）；档位只改组合约束与风险厌恶，不改预测信号。标签=ranking，复用 OOF 信号（无重训，仅改组合层）；前瞻 20 交易日，成本 10.0bps，每 20 日再平衡。"
@@ -746,13 +746,13 @@
           "file": "01_nav_curve.png",
           "title": "净值曲线",
           "desc": "策略 vs 等权 vs 国债",
-          "url": "/model%20prediction/output/figures/01_nav_curve.png"
+          "url": "/output/model/output/figures/01_nav_curve.png"
         },
         {
           "file": "02_drawdown.png",
           "title": "策略回撤",
           "desc": "策略最大回撤轨迹",
-          "url": "/model%20prediction/output/figures/02_drawdown.png"
+          "url": "/output/model/output/figures/02_drawdown.png"
         }
       ],
       "note": "激进程度=均衡（上限35%，CVaR厌恶4.0，优化器=auto）；档位只改组合约束与风险厌恶，不改预测信号。标签=ranking，严格 walk-forward 重训；前瞻 20 交易日，成本 10.0bps，每 20 日再平衡。"
@@ -1108,13 +1108,13 @@
           "file": "01_nav_curve.png",
           "title": "净值曲线",
           "desc": "策略 vs 等权 vs 国债",
-          "url": "/model%20prediction/output/aggression_aggressive/figures/01_nav_curve.png"
+          "url": "/output/model/output/aggression_aggressive/figures/01_nav_curve.png"
         },
         {
           "file": "02_drawdown.png",
           "title": "策略回撤",
           "desc": "策略最大回撤轨迹",
-          "url": "/model%20prediction/output/aggression_aggressive/figures/02_drawdown.png"
+          "url": "/output/model/output/aggression_aggressive/figures/02_drawdown.png"
         }
       ],
       "note": "激进程度=进取（上限45%，CVaR厌恶2.0，优化器=auto）；档位只改组合约束与风险厌恶，不改预测信号。标签=ranking，复用 OOF 信号（无重训，仅改组合层）；前瞻 20 交易日，成本 10.0bps，每 20 日再平衡。"

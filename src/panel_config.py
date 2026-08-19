@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""读取根目录 panel_config.json。没有文件或缺字段时用下面的默认值。"""
+"""读取 config/panel_config.json。没有文件或缺字段时用下面的默认值。"""
 
 from __future__ import annotations
 
@@ -7,8 +7,7 @@ import copy
 import json
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-CONFIG_PATH = ROOT / "panel_config.json"
+from paths import CONFIG_PATH
 
 HEATMAP_UNIVERSE = ["增长因子", "通胀因子", "利率因子", "信用因子", "汇率因子", "地缘因子"]
 EXPOSURE_UNIVERSE = [
@@ -56,6 +55,7 @@ DEFAULTS: dict = {
         "bond_assets": ["中债国债", "中债企业债", "中证转债"],
         "bond_name_markers": ["债", "转债", "城投", "政金债", "信用债", "利率债"],
         "asset_exclude_factors": {},
+        "asset_factor_mask": {},
     },
 }
 
@@ -144,20 +144,116 @@ def is_bond_asset(asset: str, cfg: dict | None = None) -> bool:
     return any(mark in asset for mark in (exp.get("bond_name_markers") or []))
 
 
+def _mask_flag(value) -> bool | None:
+    """把 1/0、true/false 转成开关；空值表示这一格没写。"""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+        return None
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    return None
+
+
+def _lookup_asset_value(mapping: dict | None, asset: str):
+    """精确匹配资产名；否则用最长的包含/前缀键（例如 中际旭创 → 中际旭创(300308)）。"""
+    if not mapping or not asset:
+        return None
+    if asset in mapping:
+        return mapping[asset]
+    ranked: list[tuple[int, object]] = []
+    for key, value in mapping.items():
+        name = str(key).strip()
+        if not name:
+            continue
+        if name == asset or asset.startswith(name) or name.startswith(asset):
+            ranked.append((1000 + len(name), value))
+        elif len(name) >= 2 and name in asset:
+            ranked.append((len(name), value))
+    if not ranked:
+        return None
+    ranked.sort(key=lambda item: -item[0])
+    return ranked[0][1]
+
+
+def _parse_mask_overrides(row, universe: list[str]) -> dict[str, bool]:
+    out: dict[str, bool] = {}
+    if isinstance(row, dict):
+        items = row.items()
+    elif isinstance(row, (list, tuple)):
+        items = ((universe[i], value) for i, value in enumerate(row) if i < len(universe))
+    else:
+        return out
+    for key, value in items:
+        flag = _mask_flag(value)
+        if flag is None:
+            continue
+        name = str(key).strip()
+        if name:
+            out[name] = flag
+    return out
+
+
 def factors_for_asset(asset: str, cfg: dict | None = None, *, as_bond: bool = False) -> list[str]:
     cfg = cfg or load_panel_config()
-    columns = exposure_factor_columns(cfg)
+    universe = exposure_factor_columns(cfg)
+    columns = list(universe)
     exp = cfg["exposure"]
     treat_as_bond = as_bond or is_bond_asset(asset, cfg)
     if exp.get("credit_only_for_bonds", True) and not treat_as_bond:
         columns = [f for f in columns if f != "信用因子"]
     extra = exp.get("asset_exclude_factors") or {}
-    drop = {str(f).strip() for f in extra.get(asset, []) if str(f).strip()}
+    drop_raw = _lookup_asset_value(extra, asset)
+    drop = {str(f).strip() for f in (drop_raw or []) if str(f).strip()}
     if drop:
         columns = [f for f in columns if f not in drop]
+    selected = set(columns)
+    mask_row = _lookup_asset_value(exp.get("asset_factor_mask") or {}, asset)
+    overrides = _parse_mask_overrides(mask_row, universe)
+    unknown = [name for name in overrides if name not in universe]
+    if unknown:
+        print(f"  {asset} 的 asset_factor_mask 忽略未知/未入列因子: " + "、".join(unknown))
+    for name, on in overrides.items():
+        if name not in universe:
+            continue
+        if on:
+            selected.add(name)
+        else:
+            selected.discard(name)
+    columns = [f for f in universe if f in selected]
     if not columns:
-        raise ValueError(f"{asset} 排除完之后没有可回归的因子，请检查 asset_exclude_factors")
+        raise ValueError(
+            f"{asset} 排除完之后没有可回归的因子，请检查 asset_factor_mask / asset_exclude_factors"
+        )
     return columns
+
+
+def build_factor_mask(
+    assets: list[str],
+    cfg: dict | None = None,
+    *,
+    as_bond: dict[str, bool] | None = None,
+) -> dict[str, dict[str, int]]:
+    """实际进入回归的 0/1 矩阵，和暴露表的行列对齐。"""
+    cfg = cfg or load_panel_config()
+    columns = exposure_factor_columns(cfg)
+    bond_flags = as_bond or {}
+    mask: dict[str, dict[str, int]] = {}
+    for asset in assets:
+        used = set(factors_for_asset(asset, cfg, as_bond=bool(bond_flags.get(asset, False))))
+        mask[str(asset)] = {factor: (1 if factor in used else 0) for factor in columns}
+    return mask
 
 
 def summarize_config(cfg: dict | None = None) -> str:

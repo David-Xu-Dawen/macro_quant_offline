@@ -27,10 +27,21 @@ from load_wind_data import (
     load_wind_data,
     pretty_asset_name,
 )
+from paths import (
+    ROOT,
+    COMBINED_CLOSE,
+    CREDIT_DIR,
+    EXCHANGE_DIR,
+    EXPOSURE_DIR,
+    GROWTH_DIR,
+    INFLATION_DIR,
+    MOBILITY_DIR,
+    POLITICS_DIR,
+    RATE_DIR,
+    ensure_output_dirs,
+)
 
 warnings.filterwarnings("ignore")
-
-ROOT = Path(__file__).resolve().parent
 
 GROWTH_WEIGHTS = {
     "pmi_yoy_diff_filled": 0.579829835,
@@ -320,7 +331,7 @@ def build_lf_growth(df: pd.DataFrame) -> None:
         panel["growth_factor_hp"] = pd.Series(trend, index=valid.index)
     out = panel.reset_index().rename(columns={"index": "date"})
     _write_monthly(
-        ROOT / "growth" / "growth_factor.csv",
+        GROWTH_DIR / "growth_factor.csv",
         out,
         list(out.columns.drop("date")),
     )
@@ -349,7 +360,7 @@ def build_lf_inflation(df: pd.DataFrame) -> None:
         }
     )
     _write_monthly(
-        ROOT / "inflasion" / "inflation_factor.csv",
+        INFLATION_DIR / "inflation_factor.csv",
         out,
         ["cpi_yoy", "ppi_yoy", "inflation_factor", "cpi_yoy_official", "ppi_yoy_official"],
     )
@@ -358,10 +369,10 @@ def build_lf_inflation(df: pd.DataFrame) -> None:
 def build_lf_rate(df: pd.DataFrame) -> None:
     y = monthly_last(df["国债10Y"])
     out = pd.DataFrame({"date": y.index, "yield_10y": y.values, "rate_factor": y.values})
-    _write_monthly(ROOT / "interest rate" / "rate_factor.csv", out, ["yield_10y", "rate_factor"])
+    _write_monthly(RATE_DIR / "rate_factor.csv", out, ["yield_10y", "rate_factor"])
     daily = df["国债10Y"].dropna()
     d_out = pd.DataFrame({"日期": daily.index, "yield_10y": daily.values})
-    _write_merged(ROOT / "interest rate" / "cn10y_yield_daily.csv", d_out, "日期", ["yield_10y"])
+    _write_merged(RATE_DIR / "cn10y_yield_daily.csv", d_out, "日期", ["yield_10y"])
 
 
 def build_lf_credit(df: pd.DataFrame) -> None:
@@ -375,7 +386,7 @@ def build_lf_credit(df: pd.DataFrame) -> None:
             "credit_factor": spread.values,
         }
     )
-    _write_monthly(ROOT / "credit" / "credit_factor.csv", out, ["spread_bp", "credit_factor"])
+    _write_monthly(CREDIT_DIR / "credit_factor.csv", out, ["spread_bp", "credit_factor"])
 
 
 def build_lf_mobility(df: pd.DataFrame) -> None:
@@ -385,7 +396,7 @@ def build_lf_mobility(df: pd.DataFrame) -> None:
     out = pd.DataFrame(
         {"date": mob.index, "m2_yoy": m2.reindex(mob.index).values, "sf_yoy": sf.reindex(mob.index).values, "mobility_factor": mob.values}
     )
-    _write_monthly(ROOT / "mobility" / "mobility_factor.csv", out, ["m2_yoy", "sf_yoy", "mobility_factor"])
+    _write_monthly(MOBILITY_DIR / "mobility_factor.csv", out, ["m2_yoy", "sf_yoy", "mobility_factor"])
 
 
 def build_dxy(df: pd.DataFrame) -> None:
@@ -400,7 +411,7 @@ def build_dxy(df: pd.DataFrame) -> None:
             "volume": 0,
         }
     )
-    _write_merged(ROOT / "exchange" / "dxy_yahoo.csv", out, "Date", ["open", "high", "low", "close", "volume"])
+    _write_merged(EXCHANGE_DIR / "dxy_yahoo.csv", out, "Date", ["open", "high", "low", "close", "volume"])
 
 
 def build_lf_geo(df: pd.DataFrame) -> None:
@@ -408,7 +419,7 @@ def build_lf_geo(df: pd.DataFrame) -> None:
         raise ValueError("缺少「全球:地缘政治风险指数」，无法更新低频地缘因子")
     gpr = monthly_last(df["gpr"])
     out = pd.DataFrame({"date": gpr.index, "gpr": gpr.values, "geo_factor": gpr.values})
-    _write_monthly(ROOT / "politics" / "geo_factor.csv", out, ["gpr", "geo_factor"])
+    _write_monthly(POLITICS_DIR / "geo_factor.csv", out, ["gpr", "geo_factor"])
 
 
 # ── HF builders ───────────────────────────────────────────────────
@@ -431,13 +442,13 @@ def build_hf_rate(df: pd.DataFrame) -> None:
         }
     )
     _write_merged(
-        ROOT / "interest rate" / "hf_rate_factor_daily.csv",
+        RATE_DIR / "hf_rate_factor_daily.csv",
         out,
         "日期",
         ["index_net", "index_neg", "neg_log_mom_pct", "hf_level", "hf_fitted", "hf_mom_pct", "yield_10y"],
     )
     idx_out = pd.DataFrame({"日期": index.index, "index_net": index.values})
-    _write_merged(ROOT / "interest rate" / "cn_gov_bond_index_daily.csv", idx_out, "日期", ["index_net"])
+    _write_merged(RATE_DIR / "cn_gov_bond_index_daily.csv", idx_out, "日期", ["index_net"])
 
 
 def build_hf_credit(df: pd.DataFrame) -> None:
@@ -465,7 +476,7 @@ def build_hf_credit(df: pd.DataFrame) -> None:
         }
     )
     _write_merged(
-        ROOT / "credit" / "hf_credit_factor_daily.csv",
+        CREDIT_DIR / "hf_credit_factor_daily.csv",
         out,
         "日期",
         [
@@ -482,7 +493,7 @@ def build_hf_credit(df: pd.DataFrame) -> None:
 
 
 def build_hf_inflation(df: pd.DataFrame) -> None:
-    meta_path = ROOT / "inflasion" / "hf_regression_results.json"
+    meta_path = INFLATION_DIR / "hf_regression_results.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
     weights = meta.get("weights") or {"pork": 0.2, "brent": 0.4, "rebar": 0.4}
     lags = meta.get("lags_months") or {"pork": 0, "brent": 1, "rebar": 3}
@@ -515,13 +526,13 @@ def build_hf_inflation(df: pd.DataFrame) -> None:
     out["hf_yoy_pct"] = hf_yoy
     out = out.reset_index().rename(columns={"index": "date"})
     out = _rebase_level_to_history(
-        ROOT / "inflasion" / "hf_inflation_weekly.csv",
+        INFLATION_DIR / "hf_inflation_weekly.csv",
         out,
         "date",
         "hf_nav",
     )
     out = _recompute_log_change_with_history(
-        ROOT / "inflasion" / "hf_inflation_weekly.csv",
+        INFLATION_DIR / "hf_inflation_weekly.csv",
         out,
         "date",
         "hf_nav",
@@ -529,14 +540,14 @@ def build_hf_inflation(df: pd.DataFrame) -> None:
         WEEKS_YEAR,
     )
     _write_merged(
-        ROOT / "inflasion" / "hf_inflation_weekly.csv",
+        INFLATION_DIR / "hf_inflation_weekly.csv",
         out,
         "date",
         ["pork", "brent", "rebar", "hf_wow", "hf_nav", "hf_yoy_pct"],
     )
     # commodities 日/周缓存
     _write_merged(
-        ROOT / "inflasion" / "commodities.csv",
+        INFLATION_DIR / "commodities.csv",
         weekly.reset_index().rename(columns={"index": "date"}),
         "date",
         ["pork", "brent", "rebar"],
@@ -566,7 +577,7 @@ def build_hf_growth(df: pd.DataFrame) -> None:
         X = np.log(monthly / monthly.shift(12)) * 100
         X.index = X.index.to_period("M")
 
-        growth = pd.read_csv(ROOT / "growth" / "growth_factor.csv", parse_dates=["date"])
+        growth = pd.read_csv(GROWTH_DIR / "growth_factor.csv", parse_dates=["date"])
         y = growth.set_index(growth["date"].dt.to_period("M"))["raw_growth_factor"].dropna()
         idx = X.dropna(how="any").index.intersection(y.index)
         try:
@@ -595,13 +606,13 @@ def build_hf_growth(df: pd.DataFrame) -> None:
         }
     )
     out = _rebase_level_to_history(
-        ROOT / "growth" / "hf_growth_factor_synthetic.csv",
+        GROWTH_DIR / "hf_growth_factor_synthetic.csv",
         out,
         "date",
         "hf_growth_factor",
     )
     out = _recompute_log_change_with_history(
-        ROOT / "growth" / "hf_growth_factor_synthetic.csv",
+        GROWTH_DIR / "hf_growth_factor_synthetic.csv",
         out,
         "date",
         "hf_growth_factor",
@@ -609,13 +620,13 @@ def build_hf_growth(df: pd.DataFrame) -> None:
         TRADING_DAYS_YEAR,
     )
     _write_merged(
-        ROOT / "growth" / "hf_growth_factor_synthetic.csv",
+        GROWTH_DIR / "hf_growth_factor_synthetic.csv",
         out,
         "date",
         ["hf_mom_pct", "hf_growth_factor", "hf_yoy"],
     )
     _write_merged(
-        ROOT / "growth" / "growth_high_freq_daily.csv",
+        GROWTH_DIR / "growth_high_freq_daily.csv",
         daily.reset_index().rename(columns={"index": "date"}),
         "date",
         assets,
@@ -623,7 +634,7 @@ def build_hf_growth(df: pd.DataFrame) -> None:
 
 
 def build_hf_mobility(df: pd.DataFrame) -> None:
-    meta_path = ROOT / "mobility" / "hf_regression_results.json"
+    meta_path = MOBILITY_DIR / "hf_regression_results.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
     weights = meta.get("weights") or {"申万大盘市盈率": -0.64, "申万小盘市盈率": 0.36}
     lags = meta.get("lags_months") or {"申万大盘市盈率": 0, "申万小盘市盈率": 0}
@@ -644,13 +655,13 @@ def build_hf_mobility(df: pd.DataFrame) -> None:
         }
     )
     out = _rebase_level_to_history(
-        ROOT / "mobility" / "hf_mobility_factor_synthetic.csv",
+        MOBILITY_DIR / "hf_mobility_factor_synthetic.csv",
         out,
         "date",
         "hf_mobility_factor",
     )
     out = _recompute_log_change_with_history(
-        ROOT / "mobility" / "hf_mobility_factor_synthetic.csv",
+        MOBILITY_DIR / "hf_mobility_factor_synthetic.csv",
         out,
         "date",
         "hf_mobility_factor",
@@ -658,13 +669,13 @@ def build_hf_mobility(df: pd.DataFrame) -> None:
         TRADING_DAYS_YEAR,
     )
     _write_merged(
-        ROOT / "mobility" / "hf_mobility_factor_synthetic.csv",
+        MOBILITY_DIR / "hf_mobility_factor_synthetic.csv",
         out,
         "date",
         ["hf_mom_pct", "hf_mobility_factor", "hf_yoy"],
     )
     _write_merged(
-        ROOT / "mobility" / "mobility_high_freq_daily.csv",
+        MOBILITY_DIR / "mobility_high_freq_daily.csv",
         daily.reset_index().rename(columns={"index": "date"}),
         "date",
         assets,
@@ -681,7 +692,7 @@ def build_hf_geo(df: pd.DataFrame) -> None:
 
     xlsx_start = df.index.min()
     daily = df[assets].copy()
-    asset_path = ROOT / "factor exposure" / "data" / "combined_close.csv"
+    asset_path = COMBINED_CLOSE
     if asset_path.exists():
         history = pd.read_csv(asset_path)
         history["date"] = _to_naive_datetime(history["date"])
@@ -733,7 +744,7 @@ def build_hf_geo(df: pd.DataFrame) -> None:
             }
         )
         monthly_fit.to_csv(
-            ROOT / "politics" / "geo_fit_monthly.csv",
+            POLITICS_DIR / "geo_fit_monthly.csv",
             index=False,
             encoding="utf-8-sig",
             float_format="%.6f",
@@ -757,17 +768,17 @@ def build_hf_geo(df: pd.DataFrame) -> None:
     level = level[level.index >= xlsx_start]
     current = daily.loc[daily.index >= xlsx_start]
     out = pd.DataFrame({"date": level.index, "hf_geo_factor": level.values})
-    geo_path = ROOT / "politics" / "hf_geo_factor_synthetic.csv"
+    geo_path = POLITICS_DIR / "hf_geo_factor_synthetic.csv"
     geo_path.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(geo_path, index=False, encoding="utf-8-sig", float_format="%.6f")
     print(f"  → {geo_path.relative_to(ROOT)} ({len(out)} 行；金/油绝对价格线性拟合 GPR 水平)")
     _write_merged(
-        ROOT / "politics" / "geo_high_freq_daily.csv",
+        POLITICS_DIR / "geo_high_freq_daily.csv",
         current.reset_index().rename(columns={"index": "date"}),
         "date",
         assets,
     )
-    meta_path = ROOT / "politics" / "hf_regression_results.json"
+    meta_path = POLITICS_DIR / "hf_regression_results.json"
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -792,7 +803,7 @@ def build_assets(df: pd.DataFrame) -> None:
         print(f"  资产面板缺列，沿用历史: {', '.join(missing_assets)}")
     extra = load_additional_assets()
     extra_names = list(extra.columns) if not extra.empty else []
-    path = ROOT / "factor exposure" / "data" / "combined_close.csv"
+    path = COMBINED_CLOSE
     # Wind 财富指数与旧 chinabond 序列量纲常不一致。按日 merge 会交错假跳价；
     # 正确做法：xlsx 起点后整段替换，并在接缝处按旧序列水平缩放，保留 Wind 收益率。
     xlsx_start = panel.index.min()
@@ -884,7 +895,7 @@ def build_assets(df: pd.DataFrame) -> None:
     extra_msg = f"；另含额外资产 {', '.join(extra_names)}" if extra_names else ""
     print(f"  → {path.relative_to(ROOT)} ({len(out)} 行；{xlsx_start.date()} 起用 Wind 整段替换{extra_msg})")
 
-    raw_dir = ROOT / "factor exposure" / "data" / "raw"
+    raw_dir = EXPOSURE_DIR / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
     for name in ("沪金", "布伦特原油"):
         s = df[name].dropna()
@@ -906,6 +917,7 @@ def build_assets(df: pd.DataFrame) -> None:
 
 
 def run_all(data_path: Path) -> None:
+    ensure_output_dirs()
     print(f"读取 {data_path}")
     df = load_wind_data(data_path)
     print(f"样本 {df.index.min().date()} ~ {df.index.max().date()}，{len(df)} 日，{len(df.columns)} 列")

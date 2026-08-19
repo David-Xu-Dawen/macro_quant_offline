@@ -23,8 +23,16 @@ import pandas as pd
 from matplotlib.colors import to_rgb
 
 from panel_config import heatmap_factors, load_panel_config
-
-ROOT = Path(__file__).parent
+from paths import (
+    CORR_DIR,
+    CREDIT_DIR,
+    EXCHANGE_DIR,
+    GROWTH_DIR,
+    INFLATION_DIR,
+    POLITICS_DIR,
+    RATE_DIR,
+    ensure_output_dirs,
+)
 
 FACTOR_LABELS = [
     "增长因子",
@@ -35,10 +43,10 @@ FACTOR_LABELS = [
     "地缘因子",
 ]
 
-OUTPUT_PANEL = ROOT / "macro_hf_factor_weekly.csv"
-OUTPUT_CORR = ROOT / "macro_hf_factor_corr.csv"
-OUTPUT_JSON = ROOT / "macro_hf_factor_corr.json"
-OUTPUT_PNG = ROOT / "macro_hf_factor_corr_heatmap.png"
+OUTPUT_PANEL = CORR_DIR / "macro_hf_factor_weekly.csv"
+OUTPUT_CORR = CORR_DIR / "macro_hf_factor_corr.csv"
+OUTPUT_JSON = CORR_DIR / "macro_hf_factor_corr.json"
+OUTPUT_PNG = CORR_DIR / "macro_hf_factor_corr_heatmap.png"
 SAMPLE_START = "2021-01-01"
 WEEK_FREQ = "W-FRI"
 
@@ -75,25 +83,25 @@ def weekly_log_yoy(series: pd.Series) -> pd.Series:
 
 def build_hf_panel() -> pd.DataFrame:
     growth = weekly_last(
-        read_series(ROOT / "growth" / "hf_growth_factor_synthetic.csv", "date", "hf_yoy")
+        read_series(GROWTH_DIR / "hf_growth_factor_synthetic.csv", "date", "hf_yoy")
     )
     inflation = weekly_last(
-        read_series(ROOT / "inflasion" / "hf_inflation_weekly.csv", "date", "hf_yoy_pct")
+        read_series(INFLATION_DIR / "hf_inflation_weekly.csv", "date", "hf_yoy_pct")
     )
     rate = weekly_last(
-        read_series(ROOT / "interest rate" / "hf_rate_factor_daily.csv", "日期", "hf_level")
+        read_series(RATE_DIR / "hf_rate_factor_daily.csv", "日期", "hf_level")
     )
     # 信用高频：财富差去趋势取反后的指数水平（与利率 hf_level 一样取周末值）
     credit = weekly_last(
-        read_series(ROOT / "credit" / "hf_credit_factor_daily.csv", "日期", "hf_credit_factor")
+        read_series(CREDIT_DIR / "hf_credit_factor_daily.csv", "日期", "hf_credit_factor")
     )
 
-    dxy = pd.read_csv(ROOT / "exchange" / "dxy_yahoo.csv", parse_dates=["Date"])
+    dxy = pd.read_csv(EXCHANGE_DIR / "dxy_yahoo.csv", parse_dates=["Date"])
     dxy["date"] = pd.to_datetime(dxy["Date"], utc=True).dt.tz_convert(None)
     exchange = weekly_last(dxy.sort_values("date").set_index("date")["close"].astype(float))
 
     politics = weekly_last(
-        read_series(ROOT / "politics" / "hf_geo_factor_synthetic.csv", "date", "hf_geo_factor")
+        read_series(POLITICS_DIR / "hf_geo_factor_synthetic.csv", "date", "hf_geo_factor")
     )
 
     panel = pd.DataFrame(
@@ -112,23 +120,23 @@ def build_hf_panel() -> pd.DataFrame:
 def build_alert_panel() -> pd.DataFrame:
     """与因子暴露一致的周度环比/变化，用于纯静态页面的波动警报。"""
     growth = weekly_sum(
-        read_series(ROOT / "growth" / "hf_growth_factor_synthetic.csv", "date", "hf_mom_pct")
+        read_series(GROWTH_DIR / "hf_growth_factor_synthetic.csv", "date", "hf_mom_pct")
     )
     inflation = weekly_last(
-        read_series(ROOT / "inflasion" / "hf_inflation_weekly.csv", "date", "hf_wow")
+        read_series(INFLATION_DIR / "hf_inflation_weekly.csv", "date", "hf_wow")
     )
     rate = weekly_sum(
-        read_series(ROOT / "interest rate" / "hf_rate_factor_daily.csv", "日期", "hf_mom_pct")
+        read_series(RATE_DIR / "hf_rate_factor_daily.csv", "日期", "hf_mom_pct")
     )
     credit = weekly_sum(
-        read_series(ROOT / "credit" / "hf_credit_factor_daily.csv", "日期", "hf_mom_pct")
+        read_series(CREDIT_DIR / "hf_credit_factor_daily.csv", "日期", "hf_mom_pct")
     )
-    dxy = pd.read_csv(ROOT / "exchange" / "dxy_yahoo.csv", parse_dates=["Date"])
+    dxy = pd.read_csv(EXCHANGE_DIR / "dxy_yahoo.csv", parse_dates=["Date"])
     dxy["date"] = pd.to_datetime(dxy["Date"], utc=True).dt.tz_convert(None)
     dxy_weekly = weekly_last(dxy.sort_values("date").set_index("date")["close"].astype(float))
     exchange = np.log(dxy_weekly / dxy_weekly.shift(1)) * 100
     geo_weekly = weekly_last(
-        read_series(ROOT / "politics" / "hf_geo_factor_synthetic.csv", "date", "hf_geo_factor")
+        read_series(POLITICS_DIR / "hf_geo_factor_synthetic.csv", "date", "hf_geo_factor")
     )
     politics = np.log(geo_weekly / geo_weekly.shift(1)) * 100
     return pd.DataFrame(
@@ -225,6 +233,7 @@ def plot_corr_table(corr: pd.DataFrame, start: str, end: str, n_weeks: int) -> N
 
 
 def main() -> None:
+    ensure_output_dirs()
     cfg = load_panel_config()
     hm = cfg["heatmap"]
     labels = heatmap_factors(cfg)

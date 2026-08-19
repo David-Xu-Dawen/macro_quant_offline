@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-RAW_DIR = ROOT / "data" / "raw"
-PANEL_DIR = ROOT / "data" / "panel"
-MODEL_DIR = ROOT / "models"
-OUTPUT_DIR = ROOT / "output"
+_SRC = Path(__file__).resolve().parent.parent
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from paths import (  # noqa: E402
+    MODEL_MODELS_DIR,
+    MODEL_PANEL_DIR,
+    MODEL_RAW_DIR,
+    MODEL_RUN_DIR,
+)
+
+RAW_DIR = MODEL_RAW_DIR
+PANEL_DIR = MODEL_PANEL_DIR
+MODEL_DIR = MODEL_MODELS_DIR
+OUTPUT_DIR = MODEL_RUN_DIR
 
 START_DATE = "2015-01-01"
 END_DATE = None

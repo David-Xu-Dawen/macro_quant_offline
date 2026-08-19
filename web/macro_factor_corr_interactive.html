@@ -1145,37 +1145,14 @@
       border-right: 0;
     }
 
-    .exposure-table th.r2-col,
-    .exposure-table td.r2-col {
-      min-width: 84px;
-      padding: 0;
-      background: #f8fbff;
-    }
-
-    .exposure-r2-cell {
-      position: relative;
-      min-height: 42px;
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      padding: 11px 12px;
-      overflow: hidden;
-    }
-
-    .exposure-r2-fill {
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      background: linear-gradient(90deg, rgba(37, 99, 235, 0.82) 0%, rgba(147, 197, 253, 0.35) 72%, rgba(255, 255, 255, 0) 100%);
-      pointer-events: none;
-    }
-
-    .exposure-r2-value {
-      position: relative;
-      z-index: 1;
-      font-weight: 700;
-      color: #0f172a;
+    .exposure-table td.mask-off {
+      background: repeating-linear-gradient(
+        -45deg,
+        #f1f5f9 0 6px,
+        #e8edf3 6px 12px
+      ) !important;
+      color: #94a3b8;
+      font-weight: 600;
     }
 
     .pair-drilldown {
@@ -2471,7 +2448,7 @@
     }
 
     .mp-table tbody tr:hover td,
-    .exposure-table tbody tr:hover td {
+    .exposure-table tbody tr:hover td:not(.mask-off) {
       background: rgba(143,45,45,0.035);
     }
 
@@ -2761,7 +2738,7 @@
       <div class="panel exposure-panel">
         <div class="matrix-title">
           <strong>资产 × 宏观因子暴露</strong>
-          <span class="hint">非债券资产信用因子暴露按先验约束置为 0</span>
+          <span class="hint">斜纹灰格 = 未进入回归（开关 0）；白底 0.000 = 进了回归但 Lasso 打成 0</span>
         </div>
         <div class="controls">
           <span class="range-status" id="exposureStatus">加载最新静态暴露...</span>
@@ -2771,7 +2748,7 @@
         </div>
         <table class="exposure-table" id="exposureTable" aria-label="资产宏观因子暴露矩阵"></table>
         <div class="note">
-          说明：格子是标准化 Lasso 系数（104 周连续块 Bootstrap 中位数）。R方是同一窗口、同一批因子的普通最小二乘，表示这组宏观因子能解释多少周收益。个股 R方低是正常的。
+          说明：格子是标准化 Lasso 系数（104 周连续块 Bootstrap 中位数）。灰色斜纹格没有进回归（开关为 0），不是被 Lasso 压成 0。
         </div>
       </div>
     </section>
@@ -2870,7 +2847,7 @@
 
     async function loadPanelConfig() {
       try {
-        const response = await fetch("/panel_config.json", { cache: "no-store" });
+        const response = await fetch("/config/panel_config.json", { cache: "no-store" });
         if (!response.ok) return;
         mergePanelConfig(await response.json());
       } catch (error) {
@@ -3010,7 +2987,7 @@
       status.textContent = "加载数据中...";
 
       try {
-        const response = await fetch("/macro_factor_corr.json", { cache: "no-store" });
+        const response = await fetch("/output/corr/macro_factor_corr.json", { cache: "no-store" });
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.detail || "无法读取 macro_factor_corr.json");
@@ -3062,7 +3039,7 @@
       status.textContent = "加载数据中...";
 
       try {
-        const response = await fetch("/macro_hf_factor_corr.json", { cache: "no-store" });
+        const response = await fetch("/output/corr/macro_hf_factor_corr.json", { cache: "no-store" });
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.detail || "无法读取 macro_hf_factor_corr.json");
@@ -3495,15 +3472,32 @@
       return clean.toFixed(3);
     }
 
-    function formatR2(value) {
-      if (!Number.isFinite(value)) return "—";
-      return value.toFixed(2);
-    }
-
     function exposureNumber(raw) {
       if (raw === null || raw === undefined || raw === "") return 0;
       const value = Number(raw);
       return Number.isFinite(value) ? value : 0;
+    }
+
+    function factorUsed(data, asset, factor) {
+      const row = lookupMaskRow(data?.factor_mask, asset);
+      if (!row || row[factor] === undefined || row[factor] === null || row[factor] === "") return true;
+      return Number(row[factor]) !== 0 && row[factor] !== false;
+    }
+
+    function lookupMaskRow(mask, asset) {
+      if (!mask || typeof mask !== "object" || !asset) return null;
+      if (Object.prototype.hasOwnProperty.call(mask, asset)) return mask[asset];
+      let best = null;
+      let bestLen = -1;
+      Object.keys(mask).forEach(key => {
+        if (!key) return;
+        const hit = asset.startsWith(key) || key.startsWith(asset) || (key.length >= 2 && asset.includes(key));
+        if (hit && key.length > bestLen) {
+          best = mask[key];
+          bestLen = key.length;
+        }
+      });
+      return best;
     }
 
     function renderExposureTable(data) {
@@ -3512,7 +3506,7 @@
       const factors = data.factors || labels;
       const assets = data.assets || [];
       const values = assets.flatMap(asset =>
-        factors.map(factor => exposureNumber(data.matrix?.[asset]?.[factor]))
+        factors.map(factor => factorUsed(data, asset, factor) ? exposureNumber(data.matrix?.[asset]?.[factor]) : 0)
       ).filter(Number.isFinite);
       const maxAbs = Math.max(0.05, ...values.map(v => Math.abs(v)));
 
@@ -3521,39 +3515,26 @@
       factors.forEach(factor => {
         head.appendChild(Object.assign(document.createElement("th"), { textContent: factor }));
       });
-      const r2Head = Object.assign(document.createElement("th"), { textContent: "R方" });
-      r2Head.className = "r2-col";
-      head.appendChild(r2Head);
       table.appendChild(head);
 
       assets.forEach(asset => {
         const tr = document.createElement("tr");
         tr.appendChild(Object.assign(document.createElement("td"), { textContent: asset }));
         factors.forEach(factor => {
-          const value = exposureNumber(data.matrix?.[asset]?.[factor]);
+          const used = factorUsed(data, asset, factor);
+          const value = used ? exposureNumber(data.matrix?.[asset]?.[factor]) : 0;
           const td = document.createElement("td");
-          td.textContent = formatExposure(value);
-          td.style.background = exposureColor(value, maxAbs);
-          td.title = `${asset} × ${factor}: ${formatExposure(value)}`;
+          if (used) {
+            td.textContent = formatExposure(value);
+            td.style.background = exposureColor(value, maxAbs);
+            td.title = `${asset} × ${factor}: ${formatExposure(value)}`;
+          } else {
+            td.textContent = "—";
+            td.className = "mask-off";
+            td.title = `${asset} × ${factor}: 未进入回归（开关=0）`;
+          }
           tr.appendChild(td);
         });
-
-        const r2Value = Number(data.r_squared_ols?.[asset] ?? data.r_squared?.[asset] ?? NaN);
-        const r2Td = document.createElement("td");
-        r2Td.className = "r2-col";
-        const r2Inner = document.createElement("div");
-        r2Inner.className = "exposure-r2-cell";
-        const r2Fill = document.createElement("div");
-        r2Fill.className = "exposure-r2-fill";
-        r2Fill.style.width = `${Math.max(0, Math.min(100, r2Value * 100))}%`;
-        const r2Text = document.createElement("span");
-        r2Text.className = "exposure-r2-value";
-        r2Text.textContent = formatR2(r2Value);
-        r2Inner.appendChild(r2Fill);
-        r2Inner.appendChild(r2Text);
-        r2Td.appendChild(r2Inner);
-        r2Td.title = `${asset} OLS R方: ${formatR2(r2Value)}`;
-        tr.appendChild(r2Td);
         table.appendChild(tr);
       });
     }
@@ -3581,7 +3562,7 @@
       const status = document.getElementById("exposureStatus");
       try {
         const latestResponse = await fetch(
-          encodeURI("/factor exposure/factor_exposure_latest.json"),
+          encodeURI("/output/exposure/factor_exposure_latest.json"),
           { cache: "no-store" },
         );
         const latestData = await latestResponse.json();
@@ -3604,7 +3585,7 @@
           `（${latestData.rolling_window_weeks} 周）`;
       } catch (error) {
         badge.textContent = "暴露矩阵加载失败";
-        meta.innerHTML = `<span class="chip">${error.message}。请先运行 python "factor exposure/compute_factor_exposure.py"</span>`;
+        meta.innerHTML = `<span class="chip">${error.message}。请先运行 python3 scripts/update_all_data.py --only exposure</span>`;
         status.textContent = error.message;
       }
     }
@@ -3636,8 +3617,8 @@
 
       async function renderStaticAlert() {
         const [hfRes, exposureRes] = await Promise.all([
-          fetch("/macro_hf_factor_corr.json", { cache: "no-store" }),
-          fetch("/factor exposure/factor_exposure_latest.json", { cache: "no-store" }),
+          fetch("/output/corr/macro_hf_factor_corr.json", { cache: "no-store" }),
+          fetch("/output/exposure/factor_exposure_latest.json", { cache: "no-store" }),
         ]);
         if (!hfRes.ok) throw new Error("无法读取静态周频警报数据");
         const hfData = await hfRes.json();
@@ -3800,7 +3781,7 @@
       async function loadModelPrediction(aggression) {
         const key = aggression || "balanced";
         noteEl.textContent = "加载中...";
-        const staticRes = await fetch("/model_prediction_static.json", { cache: "no-store" });
+        const staticRes = await fetch("/output/model/model_prediction_static.json", { cache: "no-store" });
         if (!staticRes.ok) {
           throw new Error("无法读取 model_prediction_static.json");
         }

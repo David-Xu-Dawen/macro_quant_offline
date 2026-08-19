@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import matplotlib
@@ -18,17 +17,26 @@ from matplotlib.colors import TwoSlopeNorm
 from sklearn.linear_model import Lasso, LassoCV, LinearRegression
 from sklearn.preprocessing import StandardScaler
 
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-from panel_config import (  # noqa: E402
+from paths import (
+    COMBINED_CLOSE,
+    CREDIT_DIR,
+    EXCHANGE_DIR,
+    EXPOSURE_DIR,
+    GROWTH_DIR,
+    INFLATION_DIR,
+    MOBILITY_DIR,
+    POLITICS_DIR,
+    RATE_DIR,
+    ensure_output_dirs,
+)
+from panel_config import (
+    build_factor_mask,
     exposure_factor_columns,
     factors_for_asset,
     load_panel_config,
 )
 
-OUTPUT_DIR = Path(__file__).resolve().parent
-ASSET_CLOSE_CSV = OUTPUT_DIR / "data" / "combined_close.csv"
+ASSET_CLOSE_CSV = COMBINED_CLOSE
 WEEK_FREQ = "W-FRI"
 
 FACTOR_LABELS = ["增长因子", "通胀因子", "利率因子", "信用因子", "汇率因子", "地缘因子", "流动性因子"]
@@ -42,12 +50,12 @@ BOOTSTRAP_SAMPLES = 3000
 RANDOM_SEED = 42
 ALPHA_SCALE = 0.5
 
-OUTPUT_CSV = OUTPUT_DIR / "factor_exposure_latest.csv"
-OUTPUT_JSON = OUTPUT_DIR / "factor_exposure_latest.json"
-OUTPUT_PNG = OUTPUT_DIR / "factor_exposure_latest.png"
-OUTPUT_PANEL = OUTPUT_DIR / "factor_exposure_weekly_panel.csv"
-OUTPUT_CUSTOM_CSV = OUTPUT_DIR / "factor_exposure_custom.csv"
-OUTPUT_CUSTOM_JSON = OUTPUT_DIR / "factor_exposure_custom.json"
+OUTPUT_CSV = EXPOSURE_DIR / "factor_exposure_latest.csv"
+OUTPUT_JSON = EXPOSURE_DIR / "factor_exposure_latest.json"
+OUTPUT_PNG = EXPOSURE_DIR / "factor_exposure_latest.png"
+OUTPUT_PANEL = EXPOSURE_DIR / "factor_exposure_weekly_panel.csv"
+OUTPUT_CUSTOM_CSV = EXPOSURE_DIR / "factor_exposure_custom.csv"
+OUTPUT_CUSTOM_JSON = EXPOSURE_DIR / "factor_exposure_custom.json"
 
 DATE_COLUMNS = ("date", "日期", "Date", "时间", "datetime")
 PRICE_COLUMNS = ("close", "price", "收盘", "收盘价", "净值", "value", "nav", "Close", "Price")
@@ -157,27 +165,27 @@ def weekly_sum(series: pd.Series) -> pd.Series:
 def load_macro_weekly_mom() -> pd.DataFrame:
     """宏观高频因子的周度环比收益/变化。"""
     growth = weekly_sum(
-        read_series(ROOT / "growth" / "hf_growth_factor_synthetic.csv", "date", "hf_mom_pct")
+        read_series(GROWTH_DIR / "hf_growth_factor_synthetic.csv", "date", "hf_mom_pct")
     )
-    inflation = read_series(ROOT / "inflasion" / "hf_inflation_weekly.csv", "date", "hf_wow")
+    inflation = read_series(INFLATION_DIR / "hf_inflation_weekly.csv", "date", "hf_wow")
     inflation = inflation.resample(WEEK_FREQ).last().dropna()
     rate = weekly_sum(
-        read_series(ROOT / "interest rate" / "hf_rate_factor_daily.csv", "日期", "hf_mom_pct")
+        read_series(RATE_DIR / "hf_rate_factor_daily.csv", "日期", "hf_mom_pct")
     )
     credit = weekly_sum(
-        read_series(ROOT / "credit" / "hf_credit_factor_daily.csv", "日期", "hf_mom_pct")
+        read_series(CREDIT_DIR / "hf_credit_factor_daily.csv", "日期", "hf_mom_pct")
     )
 
-    dxy = pd.read_csv(ROOT / "exchange" / "dxy_yahoo.csv", parse_dates=["Date"])
+    dxy = pd.read_csv(EXCHANGE_DIR / "dxy_yahoo.csv", parse_dates=["Date"])
     dxy["date"] = pd.to_datetime(dxy["Date"], utc=True).dt.tz_convert(None)
     dxy_weekly = dxy.sort_values("date").set_index("date")["close"].astype(float).resample(WEEK_FREQ).last()
     exchange = np.log(dxy_weekly / dxy_weekly.shift(1)) * 100
 
-    geo_level = read_series(ROOT / "politics" / "hf_geo_factor_synthetic.csv", "date", "hf_geo_factor")
+    geo_level = read_series(POLITICS_DIR / "hf_geo_factor_synthetic.csv", "date", "hf_geo_factor")
     geo_weekly = geo_level.resample(WEEK_FREQ).last()
     politics = np.log(geo_weekly / geo_weekly.shift(1)) * 100
     mobility = weekly_sum(
-        read_series(ROOT / "mobility" / "hf_mobility_factor_synthetic.csv", "date", "hf_mom_pct")
+        read_series(MOBILITY_DIR / "hf_mobility_factor_synthetic.csv", "date", "hf_mom_pct")
     )
 
     panel = pd.DataFrame(
@@ -321,11 +329,11 @@ def exposure_meta(
         "alpha_scale": alpha_scale,
         "method": "standardized Lasso coefficients, weekly rolling contiguous-block bootstrap median",
         "credit_factor_rule": (
-            "信用因子仅进入债券类资产回归，其余资产信用因子暴露置 0"
+            "信用因子仅进入债券类资产回归，其余资产默认置 0；asset_factor_mask 可按资产覆盖"
             if (cfg or {}).get("exposure", {}).get("credit_only_for_bonds", True)
-            else "信用因子对全部资产开放"
+            else "信用因子对全部资产开放；asset_factor_mask 可按资产关掉"
         ),
-        "geo_factor_rule": "沪金、布伦特原油参与地缘因子暴露回归（可用 asset_exclude_factors 关掉）",
+        "geo_factor_rule": "沪金、布伦特原油默认参与地缘因子暴露回归（可用 asset_factor_mask 或 asset_exclude_factors 关掉）",
         "bond_assets": list((cfg or {}).get("exposure", {}).get("bond_assets") or sorted(BOND_ASSETS)),
         "r_squared_definition": "同一窗口、同一批因子的普通最小二乘 R²；系数仍来自 Bootstrap + Lasso 中位数",
     }
@@ -388,6 +396,8 @@ def compute_custom_exposure(
             "n_price_rows": int(len(prices)),
             "n_overlap_weeks": int(len(common_index)),
             "as_bond": bool(as_bond),
+            "factor_mask": build_factor_mask([name], cfg, as_bond={name: bool(as_bond)}),
+            "asset_factor_mask": cfg["exposure"].get("asset_factor_mask") or {},
         },
         cfg=cfg,
     )
@@ -468,6 +478,8 @@ def compute_latest_exposure(
             "exclude_factors": list(cfg["exposure"].get("exclude_factors") or []),
             "include_factors": list(cfg["exposure"].get("include_factors") or []),
             "asset_exclude_factors": cfg["exposure"].get("asset_exclude_factors") or {},
+            "asset_factor_mask": cfg["exposure"].get("asset_factor_mask") or {},
+            "factor_mask": build_factor_mask(exposure.index.tolist(), cfg),
         },
         cfg=cfg,
     )
@@ -530,10 +542,21 @@ def plot_exposure(exposure: pd.DataFrame, meta: dict) -> None:
         pad=14,
     )
 
+    mask = meta.get("factor_mask") or {}
     for i in range(exposure.shape[0]):
         for j in range(exposure.shape[1]):
-            val = exposure.iloc[i, j]
-            ax.text(j, i, f"{val:.2f}", ha="center", va="center", fontsize=8, color="#111827")
+            asset = str(exposure.index[i])
+            factor = str(exposure.columns[j])
+            used = True
+            if asset in mask and factor in mask[asset]:
+                used = int(mask[asset][factor]) != 0
+            if used:
+                ax.text(
+                    j, i, f"{exposure.iloc[i, j]:.2f}",
+                    ha="center", va="center", fontsize=8, color="#111827",
+                )
+            else:
+                ax.text(j, i, "—", ha="center", va="center", fontsize=8, color="#94a3b8")
 
     ax.tick_params(axis="x", rotation=35)
     cbar = fig.colorbar(im, ax=ax, fraction=0.035, pad=0.02)
@@ -552,6 +575,7 @@ def save_custom_result(exposure: pd.DataFrame, r_squared: pd.Series, meta: dict)
 
 
 def main() -> None:
+    ensure_output_dirs()
     parser = argparse.ArgumentParser(description="计算资产对宏观因子的暴露矩阵")
     parser.add_argument("--bootstrap", type=int, default=None, help="Bootstrap 次数")
     parser.add_argument("--seed", type=int, default=None, help="随机种子")
