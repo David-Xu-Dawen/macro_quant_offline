@@ -25,6 +25,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.colors import to_rgb
 
+from panel_config import heatmap_factors, load_panel_config
+
 ROOT = Path(__file__).parent
 
 FACTOR_LABELS = [
@@ -77,7 +79,7 @@ def build_factor_panel() -> pd.DataFrame:
     for label, (path, date_col, value_col) in FACTOR_PATHS.items():
         series[label] = load_monthly_factor(path, date_col, value_col)
     series["汇率因子"] = load_dxy_monthly_level()
-    return pd.DataFrame(series)[FACTOR_LABELS]
+    return pd.DataFrame(series)
 
 
 def cell_facecolor(val: float, is_diag: bool) -> tuple[float, float, float]:
@@ -141,7 +143,7 @@ def plot_corr_table(corr: pd.DataFrame, start: str, end: str, n_months: int) -> 
     plt.close(fig)
 
 
-def build_corr_payload(panel: pd.DataFrame, start: str, end: str) -> dict:
+def build_corr_payload(panel: pd.DataFrame, start: str, end: str, labels: list[str]) -> dict:
     subset = panel.loc[start:end].dropna(how="any")
     if len(subset) < 3:
         raise ValueError(f"有效样本不足: {start} ~ {end} 仅 {len(subset)} 个月")
@@ -149,10 +151,10 @@ def build_corr_payload(panel: pd.DataFrame, start: str, end: str) -> dict:
     common = panel.dropna(how="any")
     series = {
         label: [None if pd.isna(v) else round(float(v), 6) for v in common[label].tolist()]
-        for label in FACTOR_LABELS
+        for label in labels
     }
     return {
-        "labels": FACTOR_LABELS,
+        "labels": labels,
         "months": common.index.astype(str).tolist(),
         "series": series,
         "start": str(subset.index.min()),
@@ -163,9 +165,17 @@ def build_corr_payload(panel: pd.DataFrame, start: str, end: str) -> dict:
 
 
 def main() -> None:
+    cfg = load_panel_config()
+    hm = cfg["heatmap"]
+    labels = heatmap_factors(cfg)
+    sample_start = hm.get("lf_start") or SAMPLE_START
     panel = build_factor_panel()
-    if SAMPLE_START:
-        panel = panel[panel.index >= pd.Period(SAMPLE_START, freq="M")]
+    missing = [f for f in labels if f not in panel.columns]
+    if missing:
+        raise ValueError("热力图缺少因子列: " + "、".join(missing))
+    panel = panel[labels]
+    if sample_start:
+        panel = panel[panel.index >= pd.Period(sample_start, freq="M")]
     panel.index = panel.index.astype(str)
 
     panel_out = panel.copy()
@@ -174,12 +184,15 @@ def main() -> None:
     common = panel.dropna(how="any")
     start = str(common.index.min()) if len(common) else "—"
     end = str(common.index.max()) if len(common) else "—"
-    corr = common.corr(method="pearson", min_periods=12)
+    min_months = int(hm.get("min_months") or 12)
+    corr = common.corr(method="pearson", min_periods=min_months)
     corr.to_csv(OUTPUT_CORR, encoding="utf-8-sig", float_format="%.4f")
 
-    payload = build_corr_payload(panel, start, end)
+    payload = build_corr_payload(panel, start, end, labels)
     payload["default_start"] = payload["start"]
     payload["default_end"] = payload["end"]
+    payload["fixed_start"] = sample_start
+    payload["panel_config"] = {"heatmap": hm, "alerts": cfg["alerts"]}
     OUTPUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     plot_corr_table(corr, start, end, len(common))

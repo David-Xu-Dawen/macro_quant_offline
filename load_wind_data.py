@@ -80,6 +80,70 @@ ALLOW_TRUE_ZERO = {
     "cpi_yoy",
     "ppi_yoy",
 }
+CORE_EXPOSURE_ASSETS = {
+    "上证50",
+    "沪深300",
+    "中证500",
+    "中证1000",
+    "恒生指数",
+    "中债国债",
+    "中债企业债",
+    "中证转债",
+    "布伦特原油",
+    "沪金",
+    "标普500",
+    "美元兑人民币",
+}
+# additional_asset 里这些是宏观输入，不是拿来画暴露的资产。
+SKIP_AS_EXTRA_ASSET = CORE_EXPOSURE_ASSETS | {
+    "pmi",
+    "fai_yoy",
+    "retail_yoy",
+    "export_yoy",
+    "import_yoy",
+    "cpi_yoy",
+    "ppi_yoy",
+    "m2_yoy",
+    "sf_yoy",
+    "gpr",
+    "国债10Y",
+    "国开债_3Y",
+    "中票AA_3Y",
+    "国债净价",
+    "国开财富_3_5",
+    "企债财富_3_5",
+    "猪肉",
+    "螺纹钢",
+    "CAD",
+    "申万大盘市盈率",
+    "申万小盘市盈率",
+}
+
+
+def additional_asset_path() -> Path | None:
+    for name in ("additional_asset.xlsx", "additional_asset.xlsm", "additional_asset.csv"):
+        path = ROOT / name
+        if path.exists():
+            return path
+    return None
+
+
+def pretty_asset_name(header: str) -> str:
+    text = _normalize_header(header)
+    for suffix in (
+        ":收盘价(前复权)",
+        ":收盘价(后复权)",
+        ":收盘价(不复权)",
+        ":收盘价",
+        "(前复权)",
+        "(后复权)",
+        "(不复权)",
+    ):
+        if text.endswith(suffix):
+            text = text[: -len(suffix)]
+    return text or header
+
+
 EXCEL_EPOCH = pd.Timestamp("1899-12-30")
 EXCEL_SUFFIXES = {".xlsx", ".xlsm"}
 FREQ_SUFFIX = re.compile(r"(:(日|周|月)|\[(日|周|月)\])$")
@@ -175,15 +239,19 @@ def map_wind_headers(headers: list[str]) -> tuple[dict[str, str], list[str]]:
 
 
 def _wind_numeric(values, *, allow_true_zero: bool) -> pd.Series:
-    """Wind 常把空格子导出成 0；空值必须回到 NaN，否则月末取值会拿到假 0。"""
-    series = pd.to_numeric(values, errors="coerce")
+    """Wind 常把空格子导出成 0 或 --；空值必须回到 NaN，否则会当成真数。"""
+    raw = pd.Series(values)
+    text = raw.map(_norm_text).str.lower()
+    raw = raw.mask(
+        text.isin({"", "-", "--", "—", "n.a.", "na", "n/a", "null", "none", "无", "#n/a", "#na", "nan"})
+    )
+    series = pd.to_numeric(raw, errors="coerce")
+    if not allow_true_zero:
+        return series.mask(series <= 0)
     zeros = series.eq(0)
     if not zeros.any():
         return series
-    if not allow_true_zero:
-        return series.mask(zeros)
     observed = int(series.notna().sum())
-    # 日频表上把空月份填成 0 时，0 会占绝大多数；真的 0.0 很少。
     if observed and zeros.sum() / observed >= 0.10:
         return series.mask(zeros)
     return series
@@ -207,6 +275,17 @@ def _row_has_mapped_series(raw: pd.DataFrame, row_idx: int) -> bool:
     names = [_norm_text(c) for c in raw.iloc[row_idx].tolist()]
     mapping, _ = map_wind_headers(names)
     return bool(mapping)
+
+
+def _drop_leading_empty_rows(raw: pd.DataFrame) -> pd.DataFrame:
+    """Wind 表经常第一行是空的，真正表头从第二行「指标名称」开始。"""
+    start = 0
+    for i in range(len(raw)):
+        values = raw.iloc[i].tolist()
+        if any(_norm_text(v) for v in values):
+            start = i
+            break
+    return raw.iloc[start:].reset_index(drop=True) if start else raw
 
 
 def _find_header_cell(raw: pd.DataFrame) -> tuple[int, int]:
@@ -271,8 +350,9 @@ def wind_date_to_datetime(value) -> pd.Timestamp | pd.NaT:
     return parsed.tz_localize(None).normalize() if getattr(parsed, "tzinfo", None) else parsed.normalize()
 
 
-def load_wind_data(path: str | Path | None = None) -> pd.DataFrame:
-    path = Path(path) if path else DEFAULT_DATA
+def _prepared_wind_frame(path: Path) -> pd.DataFrame:
+    """读 Wind 表到「date + 原始表头」宽表，尚未映射短名。"""
+    path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"找不到 Wind 数据文件: {path}")
 
@@ -280,15 +360,16 @@ def load_wind_data(path: str | Path | None = None) -> pd.DataFrame:
     if suffix in EXCEL_SUFFIXES:
         raw = _read_excel(path)
     elif suffix == ".xls":
-        raise ValueError("请用 Excel 另存为 data.xlsx（不要用旧版 .xls）")
+        raise ValueError("请用 Excel 另存为 .xlsx（不要用旧版 .xls）")
     elif suffix == ".csv":
         raw = _read_csv(path)
     else:
-        raise ValueError("支持的输入是根目录 data.xlsx 或 data.csv")
+        raise ValueError("支持的输入是 .xlsx 或 .csv")
 
     if raw.empty:
         raise ValueError(f"空文件: {path}")
 
+    raw = _drop_leading_empty_rows(raw)
     header_idx, date_col_idx = _find_header_cell(raw)
     header = [_norm_text(c) for c in raw.iloc[header_idx].tolist()]
     data = raw.iloc[header_idx + 1 :].copy()
@@ -307,7 +388,12 @@ def load_wind_data(path: str | Path | None = None) -> pd.DataFrame:
     data = data.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
     if data.columns.duplicated().any():
         data = data.loc[:, ~data.columns.duplicated()].copy()
+    return data
 
+
+def load_wind_data(path: str | Path | None = None) -> pd.DataFrame:
+    path = Path(path) if path else DEFAULT_DATA
+    data = _prepared_wind_frame(path)
     mapping, unmatched = map_wind_headers([_norm_text(c) for c in data.columns])
     out = pd.DataFrame({"date": data["date"].to_numpy()})
     for wind_name, short_name in mapping.items():
@@ -320,6 +406,67 @@ def load_wind_data(path: str | Path | None = None) -> pd.DataFrame:
     if unmatched:
         print("  未识别的 Wind 列: " + "、".join(unmatched))
     return out.drop_duplicates("date", keep="last").set_index("date").sort_index()
+
+
+def load_additional_assets(path: str | Path | None = None) -> pd.DataFrame:
+    """读取根目录 additional_asset.xlsx 里的额外资产价格。
+
+    和现在这份表一样即可：第一行可以空着，第二行左边是「指标名称」，
+    右边是各资产（Wind 常写成「中际旭创(300308):收盘价(后复权)」），
+    第三行起是日期和价格。导出时用短名，例如 中际旭创(300308)。
+    """
+    path = Path(path) if path else additional_asset_path()
+    if path is None:
+        return pd.DataFrame()
+
+    data = _prepared_wind_frame(path)
+    mapping, unmatched = map_wind_headers([_norm_text(c) for c in data.columns])
+    out = pd.DataFrame({"date": data["date"].to_numpy()})
+    added: list[str] = []
+    skipped: list[str] = []
+
+    def _put(name: str, values) -> None:
+        col = name
+        i = 2
+        while col in out.columns:
+            col = f"{name}_{i}"
+            i += 1
+        out[col] = _wind_numeric(values, allow_true_zero=False).to_numpy()
+        added.append(col)
+
+    for wind_name, short_name in mapping.items():
+        if wind_name not in data.columns:
+            continue
+        if short_name in SKIP_AS_EXTRA_ASSET:
+            skipped.append(wind_name)
+            continue
+        _put(short_name, data[wind_name])
+
+    skip_headers = META_LABELS | {"", "nan", "None", "date", "日期"}
+    for header in unmatched:
+        if header in skip_headers or _is_wind_corner(header):
+            continue
+        if header not in data.columns:
+            continue
+        name = pretty_asset_name(header)
+        if name in SKIP_AS_EXTRA_ASSET:
+            skipped.append(header)
+            continue
+        series = _wind_numeric(data[header], allow_true_zero=False)
+        if int(series.notna().sum()) < 20:
+            skipped.append(f"{header}(有效点过少)")
+            continue
+        _put(name, data[header])
+
+    frame = out.drop_duplicates("date", keep="last").set_index("date").sort_index()
+    extra_cols = [c for c in frame.columns]
+    print(
+        f"  additional_asset: {path.name} → 额外资产 {len(extra_cols)} 个"
+        + (f"（{', '.join(extra_cols)}）" if extra_cols else "")
+    )
+    if skipped:
+        print("  已跳过: " + "、".join(skipped))
+    return frame
 
 
 if __name__ == "__main__":

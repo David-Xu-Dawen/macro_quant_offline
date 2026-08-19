@@ -19,7 +19,13 @@ import pandas as pd
 import statsmodels.api as sm
 from statsmodels.tsa.filters.hp_filter import hpfilter
 
-from load_wind_data import DEFAULT_DATA, expected_wind_name, load_wind_data
+from load_wind_data import (
+    DEFAULT_DATA,
+    expected_wind_name,
+    load_additional_assets,
+    load_wind_data,
+    pretty_asset_name,
+)
 
 warnings.filterwarnings("ignore")
 
@@ -783,14 +789,20 @@ def build_assets(df: pd.DataFrame) -> None:
     missing_assets = [c for c in cols if c not in panel.columns]
     if missing_assets:
         print(f"  资产面板缺列，沿用历史: {', '.join(missing_assets)}")
+    extra = load_additional_assets()
+    extra_names = list(extra.columns) if not extra.empty else []
     path = ROOT / "factor exposure" / "data" / "combined_close.csv"
     # Wind 财富指数与旧 chinabond 序列量纲常不一致。按日 merge 会交错假跳价；
     # 正确做法：xlsx 起点后整段替换，并在接缝处按旧序列水平缩放，保留 Wind 收益率。
     xlsx_start = panel.index.min()
+    extra_start = extra.index.min() if extra_names else None
+    old = None
     if path.exists():
         old = pd.read_csv(path)
         old["date"] = _to_naive_datetime(old["date"])
         old = old.dropna(subset=["date"]).set_index("date").sort_index()
+
+    if old is not None:
         keep = old[old.index < pd.Timestamp(xlsx_start)].copy()
         for c in panel.columns:
             if c not in keep.columns:
@@ -805,11 +817,11 @@ def build_assets(df: pd.DataFrame) -> None:
         for c in missing_assets:
             if c in old.columns:
                 panel[c] = old[c].reindex(panel.index)
-        keep = keep.reindex(columns=cols)
-        panel = panel.reindex(columns=cols)
-        keep = keep.reset_index()[["date"] + cols]
-        incoming = panel.reset_index().rename(columns={"index": "date"})
-        out = pd.concat([keep, incoming], ignore_index=True)
+        keep_core = keep.reindex(columns=cols)
+        panel_core = panel.reindex(columns=cols)
+        keep_core = keep_core.reset_index()[["date"] + cols]
+        incoming = panel_core.reset_index().rename(columns={"index": "date"})
+        out = pd.concat([keep_core, incoming], ignore_index=True)
         out = out.drop_duplicates("date", keep="last").sort_values("date").reset_index(drop=True)
         if missing_assets:
             old_full = old.reset_index().rename(columns={"index": "date"})
@@ -817,11 +829,57 @@ def build_assets(df: pd.DataFrame) -> None:
                 if c in old_full.columns:
                     restored = old_full[["date", c]].dropna(subset=[c])
                     out = out.drop(columns=[c], errors="ignore").merge(restored, on="date", how="left")
+        # 保留旧的额外资产列（本次 additional_asset 没再给的）。
+        # 同一资产若以前留下了带「收盘价(后复权)」的长名，不要再当另一列。
+        extra_keys = set(extra_names) | {pretty_asset_name(c) for c in extra_names}
+        leftover = [
+            c
+            for c in old.columns
+            if c not in cols
+            and c not in extra_keys
+            and pretty_asset_name(c) not in extra_keys
+        ]
+        if leftover:
+            hist = old.reset_index().rename(columns={"index": "date"})[["date"] + leftover]
+            out = out.merge(hist, on="date", how="left")
     else:
         out = panel.reset_index().rename(columns={"index": "date"})
+
+    if extra_names:
+        extra_panel = extra.copy()
+        if old is not None and extra_start is not None:
+            keep_extra = old[old.index < pd.Timestamp(extra_start)]
+            for c in extra_names:
+                old_col = c if c in keep_extra.columns else next(
+                    (
+                        oc
+                        for oc in keep_extra.columns
+                        if pretty_asset_name(oc) == c or pretty_asset_name(oc) == pretty_asset_name(c)
+                    ),
+                    None,
+                )
+                old_hist = keep_extra[old_col].dropna() if old_col else pd.Series(dtype=float)
+                new_hist = extra_panel[c].dropna()
+                if not old_hist.empty and not new_hist.empty and abs(float(new_hist.iloc[0])) > 1e-12:
+                    scale = float(old_hist.iloc[-1]) / float(new_hist.iloc[0])
+                    if abs(scale - 1.0) > 0.02:
+                        extra_panel[c] = extra_panel[c] * scale
+                        print(f"    缩放 {c}: ×{scale:.4f}（额外资产接缝对齐）")
+        extra_in = extra_panel.reset_index().rename(columns={"index": "date"})
+        extra_in["date"] = _to_naive_datetime(extra_in["date"])
+        out["date"] = _to_naive_datetime(out["date"])
+        out = out.merge(extra_in, on="date", how="outer", suffixes=("", "_new"))
+        for c in extra_names:
+            new_col = f"{c}_new"
+            if new_col in out.columns:
+                out[c] = out[new_col].combine_first(out[c]) if c in out.columns else out[new_col]
+                out = out.drop(columns=[new_col])
+        out = out.sort_values("date").drop_duplicates("date", keep="last").reset_index(drop=True)
+
     path.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(path, index=False, encoding="utf-8-sig", float_format="%.6f")
-    print(f"  → {path.relative_to(ROOT)} ({len(out)} 行；{xlsx_start.date()} 起用 Wind 整段替换)")
+    extra_msg = f"；另含额外资产 {', '.join(extra_names)}" if extra_names else ""
+    print(f"  → {path.relative_to(ROOT)} ({len(out)} 行；{xlsx_start.date()} 起用 Wind 整段替换{extra_msg})")
 
     raw_dir = ROOT / "factor exposure" / "data" / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)

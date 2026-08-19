@@ -1,0 +1,48 @@
+{
+  "_readme": [
+    "改完保存，再跑：python3 update_all_data.py --skip-model（Windows 用 python）。然后强制刷新网页。",
+    "heatmap.factors：相关矩阵要显示哪些因子。exposure.factors：暴露矩阵有哪些列。",
+    "include_factors 若填写（非空），则只保留名单里的因子。exclude_factors 是从里面再划掉。",
+    "例如暴露不想看地缘：把地缘因子放进 exposure.exclude_factors。",
+    "例如暴露只看增长和利率：exposure.include_factors 写成 [\"增长因子\", \"利率因子\"]。",
+    "某个资产强制不算某因子：exposure.asset_exclude_factors，例如 {\"沪金\": [\"地缘因子\"]}。",
+    "credit_only_for_bonds 为 true 时，非债券的信用因子不进回归、格子为 0。",
+    "end_date 写成 \"2024-12-27\" 可把暴露窗口截到那一周；null 表示用最新一周。",
+    "滚动相关、波动警报改完刷新网页就会变；窗口和因子名单要重新跑更新才会进矩阵。"
+  ],
+  "heatmap": {
+    "lf_start": "2021-01",
+    "hf_start": "2021-01-01",
+    "factors": ["增长因子", "通胀因子", "利率因子", "信用因子", "汇率因子", "地缘因子"],
+    "include_factors": [],
+    "exclude_factors": [],
+    "rolling_corr_months": 12,
+    "rolling_corr_weeks": 52,
+    "min_months": 12,
+    "min_weeks": 52
+  },
+  "alerts": {
+    "vol_window_weeks": 13,
+    "shock_z": 2.0,
+    "shock_lookback_weeks": 52,
+    "high_percentile": 85,
+    "watch_percentile": 70,
+    "forecast_high": 75,
+    "forecast_mid": 55
+  },
+  "exposure": {
+    "rolling_window_weeks": 260,
+    "sample_length_weeks": 104,
+    "bootstrap_samples": 3000,
+    "alpha_scale": 0.5,
+    "random_seed": 42,
+    "end_date": null,
+    "factors": ["增长因子", "通胀因子", "利率因子", "信用因子", "汇率因子", "地缘因子", "流动性因子"],
+    "include_factors": [],
+    "exclude_factors": [],
+    "credit_only_for_bonds": true,
+    "bond_assets": ["中债国债", "中债企业债", "中证转债"],
+    "bond_name_markers": ["债", "转债", "城投", "政金债", "信用债", "利率债"],
+    "asset_exclude_factors": {}
+  }
+}

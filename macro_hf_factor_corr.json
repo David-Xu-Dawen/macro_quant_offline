@@ -4207,5 +4207,35 @@
     ]
   },
   "default_start": "2021-04-16",
-  "default_end": "2026-08-21"
+  "default_end": "2026-08-21",
+  "fixed_start": "2021-01-01",
+  "panel_config": {
+    "heatmap": {
+      "lf_start": "2021-01",
+      "hf_start": "2021-01-01",
+      "factors": [
+        "增长因子",
+        "通胀因子",
+        "利率因子",
+        "信用因子",
+        "汇率因子",
+        "地缘因子"
+      ],
+      "include_factors": [],
+      "exclude_factors": [],
+      "rolling_corr_months": 12,
+      "rolling_corr_weeks": 52,
+      "min_months": 12,
+      "min_weeks": 52
+    },
+    "alerts": {
+      "vol_window_weeks": 13,
+      "shock_z": 2.0,
+      "shock_lookback_weeks": 52,
+      "high_percentile": 85,
+      "watch_percentile": 70,
+      "forecast_high": 75,
+      "forecast_mid": 55
+    }
+  }
 }

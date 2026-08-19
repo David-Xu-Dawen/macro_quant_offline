@@ -2637,7 +2637,7 @@
       <div class="vol-monitor-head">
         <div>
           <h2>周频波动警报</h2>
-          <div class="hint" id="volMonitorHint">基于与暴露一致的周度 MoM：13 周波动分位 + 本周 2σ 冲击</div>
+          <div class="hint" id="volMonitorHint">基于与暴露一致的周度 MoM：波动分位 + 本周冲击</div>
         </div>
         <div class="vol-status-wrap">
           <span class="vol-status" id="volStatus">加载中</span>
@@ -2737,7 +2737,7 @@
         </div>
         <div class="pair-chart-card">
           <h3>滚动相关</h3>
-          <p class="sub">月频 12 个月窗 · 周频 52 周窗</p>
+          <p class="sub" id="rollingCorrHint">月频滚动窗 · 周频滚动窗</p>
           <div id="chartRolling"></div>
           <div class="pair-legend">
             <span><i style="background:#8b1e1e"></i>月频滚动相关</span>
@@ -2771,7 +2771,7 @@
         </div>
         <table class="exposure-table" id="exposureTable" aria-label="资产宏观因子暴露矩阵"></table>
         <div class="note">
-          说明：表格数值为标准化 Lasso 回归系数，中位数来自滚动窗口内连续周频区间 Bootstrap。R方为 Bootstrap 中位系数在完整滚动窗口上的稳定性调整解释度，不等同于完整窗口 OLS。正值代表资产周度收益与该宏观高频因子同向，负值代表反向，接近 0 表示该因子暴露被 Lasso 压缩或影响较弱。
+          说明：格子是标准化 Lasso 系数（104 周连续块 Bootstrap 中位数）。R方是同一窗口、同一批因子的普通最小二乘，表示这组宏观因子能解释多少周收益。个股 R方低是正常的。
         </div>
       </div>
     </section>
@@ -2832,15 +2832,66 @@
   </div>
 
   <script>
-    const labels = ["增长因子", "通胀因子", "利率因子", "信用因子", "汇率因子", "地缘因子"];
+    let labels = ["增长因子", "通胀因子", "利率因子", "信用因子", "汇率因子", "地缘因子"];
     let corr = [];
     let availableMonths = [];
     let hfCorr = [];
     let availableWeeks = [];
-    const FIXED_START_MONTH = "2021-01";
-    const FIXED_START_WEEK = "2021-01-01";
+    let FIXED_START_MONTH = "2021-01";
+    let FIXED_START_WEEK = "2021-01-01";
     let selectedCell = [1, 4];
     let selectedCellHf = [1, 4];
+    let panelConfig = {
+      heatmap: {
+        lf_start: "2021-01",
+        hf_start: "2021-01-01",
+        rolling_corr_months: 12,
+        rolling_corr_weeks: 52,
+        min_months: 12,
+        min_weeks: 52,
+      },
+      alerts: {
+        vol_window_weeks: 13,
+        shock_z: 2,
+        shock_lookback_weeks: 52,
+        high_percentile: 85,
+        watch_percentile: 70,
+        forecast_high: 75,
+        forecast_mid: 55,
+      },
+    };
+
+    function mergePanelConfig(incoming) {
+      if (!incoming || typeof incoming !== "object") return;
+      if (incoming.heatmap) panelConfig.heatmap = { ...panelConfig.heatmap, ...incoming.heatmap };
+      if (incoming.alerts) panelConfig.alerts = { ...panelConfig.alerts, ...incoming.alerts };
+      if (incoming.exposure) panelConfig.exposure = incoming.exposure;
+    }
+
+    async function loadPanelConfig() {
+      try {
+        const response = await fetch("/panel_config.json", { cache: "no-store" });
+        if (!response.ok) return;
+        mergePanelConfig(await response.json());
+      } catch (error) {
+        /* 没有配置文件就用页面默认值 */
+      }
+      const hm = panelConfig.heatmap || {};
+      if (hm.lf_start) FIXED_START_MONTH = hm.lf_start;
+      if (hm.hf_start) FIXED_START_WEEK = hm.hf_start;
+      const rollHint = document.getElementById("rollingCorrHint");
+      if (rollHint) {
+        rollHint.textContent = `月频 ${hm.rolling_corr_months ?? 12} 个月窗 · 周频 ${hm.rolling_corr_weeks ?? 52} 周窗`;
+      }
+    }
+
+    function clampCell(cell) {
+      const n = Math.max(1, labels.length);
+      return [
+        Math.min(Math.max(0, cell[0]), n - 1),
+        Math.min(Math.max(0, cell[1]), n - 1),
+      ];
+    }
 
     const factorNotes = {
       "增长因子": "低频/热力图为宏观同比类合成；暴露与波动监控用高频环比（hf_mom_pct）。",
@@ -2891,7 +2942,7 @@
       const status = document.getElementById("rangeStatus");
       const badge = document.getElementById("sampleBadge");
       const label = `月频样本：${start} ~ ${end}（${nMonths}个月）`;
-      status.textContent = nMonths >= 12 ? label : `${label}，样本偏短`;
+      status.textContent = nMonths >= (panelConfig.heatmap.min_months ?? 12) ? label : `${label}，样本偏短`;
       badge.textContent = label;
     }
 
@@ -2942,7 +2993,10 @@
 
       status.textContent = "计算中...";
       try {
-        const data = pearsonCorrMatrix(lfPanelSeries, availableMonths, start, end);
+        const series = Object.fromEntries(
+          labels.map(lab => [lab, lfPanelSeries?.[lab]]).filter(([, values]) => Array.isArray(values))
+        );
+        const data = pearsonCorrMatrix(series, availableMonths, start, end);
         corr = data.corr;
         updateRangeStatus(data.n_months, data.start, data.end);
         buildHeatmap();
@@ -2965,6 +3019,10 @@
         availableMonths = data.months || [];
         corr = data.corr || [];
         lfPanelSeries = data.series || null;
+        if (Array.isArray(data.labels) && data.labels.length) labels = data.labels;
+        if (data.fixed_start) FIXED_START_MONTH = data.fixed_start;
+        mergePanelConfig(data.panel_config);
+        selectedCell = clampCell(selectedCell);
         await applyRange();
       } catch (error) {
         status.textContent = `${error.message}。请先运行 python plot_macro_factor_corr.py`;
@@ -2975,7 +3033,7 @@
       const status = document.getElementById("rangeStatusHf");
       const badge = document.getElementById("sampleBadgeHf");
       const label = `周频样本：${start} ~ ${end}（${nWeeks}周）`;
-      status.textContent = nWeeks >= 52 ? label : `${label}，样本偏短`;
+      status.textContent = nWeeks >= (panelConfig.heatmap.min_weeks ?? 52) ? label : `${label}，样本偏短`;
       badge.textContent = label;
     }
 
@@ -2987,7 +3045,10 @@
 
       status.textContent = "计算中...";
       try {
-        const data = pearsonCorrMatrix(hfPanelSeries, availableWeeks, start, end);
+        const series = Object.fromEntries(
+          labels.map(lab => [lab, hfPanelSeries?.[lab]]).filter(([, values]) => Array.isArray(values))
+        );
+        const data = pearsonCorrMatrix(series, availableWeeks, start, end);
         hfCorr = data.corr;
         updateRangeStatusHf(data.n_weeks || data.n_periods, data.start, data.end);
         buildHeatmapHf();
@@ -3010,6 +3071,10 @@
         availableWeeks = data.weeks || data.periods || [];
         hfCorr = data.corr || [];
         hfPanelSeries = data.series || null;
+        if (Array.isArray(data.labels) && data.labels.length) labels = data.labels;
+        if (data.fixed_start) FIXED_START_WEEK = data.fixed_start;
+        mergePanelConfig(data.panel_config);
+        selectedCellHf = clampCell(selectedCellHf);
         await applyRangeHf();
       } catch (error) {
         status.textContent = `${error.message}。请先运行 python plot_macro_hf_corr.py`;
@@ -3244,13 +3309,13 @@
       const range = currentCompareRange();
       const lf = localPairSeries(
         lfPanelSeries, availableMonths, factorA, factorB,
-        range.start, range.end, 12
+        range.start, range.end, panelConfig.heatmap.rolling_corr_months ?? 12
       );
       const hfStart = `${range.start}-01`;
       const hfEnd = `${range.end}-31`;
       const hf = localPairSeries(
         hfPanelSeries, availableWeeks, factorA, factorB,
-        hfStart, hfEnd, 52
+        hfStart, hfEnd, panelConfig.heatmap.rolling_corr_weeks ?? 52
       );
       const hfMonthly = new Map();
       hf.dates.forEach((date, i) => hfMonthly.set(date.slice(0, 7), [hf.a_z[i], hf.b_z[i]]));
@@ -3435,12 +3500,20 @@
       return value.toFixed(2);
     }
 
+    function exposureNumber(raw) {
+      if (raw === null || raw === undefined || raw === "") return 0;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : 0;
+    }
+
     function renderExposureTable(data) {
       const table = document.getElementById("exposureTable");
       table.innerHTML = "";
       const factors = data.factors || labels;
       const assets = data.assets || [];
-      const values = assets.flatMap(asset => factors.map(factor => Number(data.matrix?.[asset]?.[factor] || 0)));
+      const values = assets.flatMap(asset =>
+        factors.map(factor => exposureNumber(data.matrix?.[asset]?.[factor]))
+      ).filter(Number.isFinite);
       const maxAbs = Math.max(0.05, ...values.map(v => Math.abs(v)));
 
       const head = document.createElement("tr");
@@ -3457,7 +3530,7 @@
         const tr = document.createElement("tr");
         tr.appendChild(Object.assign(document.createElement("td"), { textContent: asset }));
         factors.forEach(factor => {
-          const value = Number(data.matrix?.[asset]?.[factor] || 0);
+          const value = exposureNumber(data.matrix?.[asset]?.[factor]);
           const td = document.createElement("td");
           td.textContent = formatExposure(value);
           td.style.background = exposureColor(value, maxAbs);
@@ -3465,7 +3538,7 @@
           tr.appendChild(td);
         });
 
-        const r2Value = Number(data.r_squared?.[asset] ?? NaN);
+        const r2Value = Number(data.r_squared_ols?.[asset] ?? data.r_squared?.[asset] ?? NaN);
         const r2Td = document.createElement("td");
         r2Td.className = "r2-col";
         const r2Inner = document.createElement("div");
@@ -3479,7 +3552,7 @@
         r2Inner.appendChild(r2Fill);
         r2Inner.appendChild(r2Text);
         r2Td.appendChild(r2Inner);
-        r2Td.title = `${asset} 回归 R方: ${formatR2(r2Value)}`;
+        r2Td.title = `${asset} OLS R方: ${formatR2(r2Value)}`;
         tr.appendChild(r2Td);
         table.appendChild(tr);
       });
@@ -3518,10 +3591,12 @@
 
         const subtitle = document.getElementById("exposureSubtitle");
         if (subtitle) {
+          const extra = (latestData.additional_assets || []).filter(Boolean);
           subtitle.textContent =
             `Y 为大类资产周度对数收益率，X 为宏观高频因子周度环比/变化；` +
             `当前结果窗口 ${latestData.rolling_window_weeks} 周` +
-            `（${latestData.window_start} ~ ${latestData.window_end}），Bootstrap + Lasso`;
+            `（${latestData.window_start} ~ ${latestData.window_end}），Bootstrap + Lasso` +
+            (extra.length ? `；额外资产：${extra.join("、")}` : "");
         }
         updateExposureUI(latestData);
         status.textContent =
@@ -3550,10 +3625,12 @@
       const selectEl = document.getElementById("volForecastFactor");
       const allEl = document.getElementById("volForecastAll");
 
-      function unifiedRiskLevel(score) {
+        function unifiedRiskLevel(score) {
         if (score == null) return "数据不足";
-        if (score >= 75) return "偏高";
-        if (score >= 55) return "中性";
+        const high = Number(panelConfig.alerts.forecast_high) || 75;
+        const mid = Number(panelConfig.alerts.forecast_mid) || 55;
+        if (score >= high) return "偏高";
+        if (score >= mid) return "中性";
         return "偏低";
       }
 
@@ -3577,17 +3654,24 @@
           const m = mean(values);
           return Math.sqrt(values.reduce((s, v) => s + (v - m) ** 2, 0) / (values.length - 1));
         };
+        const alerts = panelConfig.alerts || {};
+        const volWindow = Math.max(2, Number(alerts.vol_window_weeks) || 13);
+        const shockZ = Number(alerts.shock_z) || 2;
+        const lookback = Math.max(volWindow, Number(alerts.shock_lookback_weeks) || 52);
+        const highPct = Number(alerts.high_percentile) || 85;
+        const watchPct = Number(alerts.watch_percentile) || 70;
+        const forecastHigh = Number(alerts.forecast_high) || 75;
         const rows = Object.entries(alertSeries).map(([factor, raw]) => {
           const values = raw.map(Number).filter(Number.isFinite);
           const rollingVol = [];
-          for (let i = 12; i < values.length; i++) {
-            rollingVol.push(std(values.slice(i - 12, i + 1)));
+          for (let i = volWindow - 1; i < values.length; i++) {
+            rollingVol.push(std(values.slice(i - volWindow + 1, i + 1)));
           }
           const currentVol = rollingVol[rollingVol.length - 1] || 0;
           const percentile = rollingVol.length
             ? 100 * rollingVol.filter(v => v <= currentVol).length / rollingVol.length
             : 0;
-          const recent = values.slice(-52);
+          const recent = values.slice(-lookback);
           const recentStd = std(recent);
           const latest = values[values.length - 1] || 0;
           const z = recentStd ? (latest - mean(recent)) / recentStd : 0;
@@ -3595,10 +3679,10 @@
         }).sort((a, b) => b.vol_percentile - a.vol_percentile);
 
         const maxRisk = rows[0]?.vol_percentile || 0;
-        const status = maxRisk >= 85 ? "偏高" : maxRisk >= 70 ? "留意" : "正常";
+        const status = maxRisk >= highPct ? "偏高" : maxRisk >= watchPct ? "留意" : "正常";
         statusEl.textContent = status;
         statusEl.className = "vol-status " + (status === "偏高" ? "bad" : status === "留意" ? "warn" : "ok");
-        hintEl.textContent = `截至 ${weeks[weeks.length - 1]} · 13 周波动分位 · 本周 2σ 冲击`;
+        hintEl.textContent = `截至 ${weeks[weeks.length - 1]} · ${volWindow} 周波动分位 · 本周 ${shockZ}σ 冲击`;
         noteEl.textContent = `静态警报：当前最高波动分位为 ${Math.round(maxRisk)}%。`;
 
         selectEl.innerHTML = "";
@@ -3606,39 +3690,39 @@
         const renderStaticFactor = factor => {
           const row = rows.find(item => item.factor === factor) || rows[0];
           const score = row?.vol_percentile ?? 0;
-          forecastEl.className = "vol-forecast" + (score >= 75 ? " high" : "");
+          forecastEl.className = "vol-forecast" + (score >= forecastHigh ? " high" : "");
           probEl.textContent = `${Math.round(score)}%`;
           titleEl.textContent = `${row.factor} · ${unifiedRiskLevel(score)}风险`;
-          textEl.textContent = `当前 13 周波动率处于历史 ${Math.round(score)}% 分位。`;
+          textEl.textContent = `当前 ${volWindow} 周波动率处于历史 ${Math.round(score)}% 分位。`;
           metaEl.textContent = "静态模式仅计算当前风险，不包含模型前瞻概率";
           featsEl.innerHTML = `<span><i>本周变化</i><b>${row.latest.toFixed(3)}</b></span>` +
             `<span><i>本周冲击 Z</i><b>${row.shock_z.toFixed(2)}</b></span>`;
         };
         selectEl.addEventListener("change", () => renderStaticFactor(selectEl.value));
         renderStaticFactor(rows[0]?.factor);
-        allEl.textContent = "警报由本地周频因子 JSON 直接计算：13 周滚动波动率的历史分位。";
+        allEl.textContent = `警报由本地周频因子 JSON 直接计算：${volWindow} 周滚动波动率的历史分位。`;
 
         factorEl.innerHTML = rows.map(row => {
           const score = row.vol_percentile;
-          const rowClass = score >= 75 ? "high" : score >= 55 ? "mid" : "low";
+          const rowClass = score >= forecastHigh ? "high" : score >= (Number(alerts.forecast_mid) || 55) ? "mid" : "low";
           return `<div class="vol-row ${rowClass}">
             <span class="name">${row.factor.replace("因子", "")}</span>
             <div class="vol-risk-track">
               <div class="vol-bar"><span style="width:${Math.max(6, score)}%"></span></div>
-              <div class="vol-risk-components">13周波动 ${row.current_vol.toFixed(3)}</div>
+              <div class="vol-risk-components">${volWindow}周波动 ${row.current_vol.toFixed(3)}</div>
             </div>
             <span class="pct">${Math.round(score)}%</span>
             <span class="lvl">${unifiedRiskLevel(score)}</span>
           </div>`;
         }).join("");
 
-        const shocks = rows.filter(row => Math.abs(row.shock_z) >= 2);
+        const shocks = rows.filter(row => Math.abs(row.shock_z) >= shockZ);
         shockEl.innerHTML = shocks.length ? shocks.map((row, i) =>
           `<div class="vol-item shock">
             <span class="rank">${i + 1}</span>
             <div class="main">
               <div class="title">${row.factor.replace("因子", "")} · ${row.shock_z >= 0 ? "上行" : "下行"}</div>
-              <div class="sub">本周变化触发 2σ 阈值</div>
+              <div class="sub">本周变化触发 ${shockZ}σ 阈值</div>
             </div>
             <span class="metric">Z ${row.shock_z.toFixed(2)}</span>
           </div>`
@@ -3652,7 +3736,7 @@
             let topFactor = null;
             let topValue = 0;
             Object.entries(matrix).forEach(([factor, coef]) => {
-              const contribution = Math.abs(Number(coef) * (zByFactor[factor] || 0));
+              const contribution = Math.abs(Number(coef || 0) * (zByFactor[factor] || 0));
               pressure += contribution;
               if (contribution > topValue) {
                 topValue = contribution;
@@ -3807,12 +3891,14 @@
       }
     }
 
-    initRangeControls();
-    initRangeControlsHf();
-    initVolMonitor();
-    initModelPrediction();
-    initFactorExposure();
-    initSheetTabs();
+    loadPanelConfig().then(() => {
+      initRangeControls();
+      initRangeControlsHf();
+      initVolMonitor();
+      initModelPrediction();
+      initFactorExposure();
+      initSheetTabs();
+    });
     document.getElementById("pairCloseBtn").addEventListener("click", () => {
       document.getElementById("pairDrilldown").classList.remove("open");
     });

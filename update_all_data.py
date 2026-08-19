@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from load_wind_data import DEFAULT_DATA
+from panel_config import load_panel_config, summarize_config
 
 ROOT = Path(__file__).resolve().parent
 PYTHON = sys.executable
@@ -52,18 +53,36 @@ def _step(name: str, rel_dir: str, script: str, *args: str, stage: str) -> Step:
 
 
 def build_steps(args: argparse.Namespace) -> list[Step]:
+    cfg = load_panel_config()
+    exp = cfg["exposure"]
+    bootstrap = args.bootstrap if args.bootstrap is not None else int(exp["bootstrap_samples"])
+    alpha_scale = args.alpha_scale if args.alpha_scale is not None else float(exp["alpha_scale"])
+    rolling_window = (
+        args.rolling_window_weeks
+        if args.rolling_window_weeks is not None
+        else int(exp["rolling_window_weeks"])
+    )
+    sample_length = (
+        args.sample_length_weeks
+        if args.sample_length_weeks is not None
+        else int(exp["sample_length_weeks"])
+    )
     exposure_args = [
         "--bootstrap",
-        str(args.bootstrap),
+        str(bootstrap),
         "--alpha-scale",
-        str(args.alpha_scale),
+        str(alpha_scale),
         "--rolling-window-weeks",
-        str(args.rolling_window_weeks),
+        str(rolling_window),
         "--sample-length-weeks",
-        str(args.sample_length_weeks),
+        str(sample_length),
     ]
+    end_date = args.end_date or exp.get("end_date")
+    if end_date:
+        exposure_args.extend(["--end-date", str(end_date)])
     return [
         _step("Wind 本地数据因子", "", "update_from_xlsx.py", "--data", str(args.data), stage="data"),
+        _step("高频因子日频导出", "", "export_hf_factor_daily.py", stage="data"),
         _step("月频相关矩阵", "", "plot_macro_factor_corr.py", stage="corr"),
         _step("周频矩阵与静态警报", "", "plot_macro_hf_corr.py", stage="corr"),
         _step(
@@ -100,10 +119,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="某一步失败后继续后续步骤",
     )
-    parser.add_argument("--bootstrap", type=int, default=3000)
-    parser.add_argument("--alpha-scale", type=float, default=0.5)
-    parser.add_argument("--rolling-window-weeks", type=int, default=260)
-    parser.add_argument("--sample-length-weeks", type=int, default=104)
+    parser.add_argument("--bootstrap", type=int, default=None)
+    parser.add_argument("--alpha-scale", type=float, default=None)
+    parser.add_argument("--rolling-window-weeks", type=int, default=None)
+    parser.add_argument("--sample-length-weeks", type=int, default=None)
+    parser.add_argument("--end-date", type=str, default=None, help="暴露窗口结束周，默认读 panel_config.json")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -158,6 +178,7 @@ def main() -> int:
         f"模式: {args.data.name} 纯离线；将执行 {len(steps)} 步，阶段: "
         f"{', '.join(s for s in STAGES if s in stages)}"
     )
+    print(f"参数: {summarize_config()}")
     started = time.perf_counter()
     failures: list[str] = []
     for step in steps:

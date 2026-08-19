@@ -22,6 +22,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.colors import to_rgb
 
+from panel_config import heatmap_factors, load_panel_config
+
 ROOT = Path(__file__).parent
 
 FACTOR_LABELS = [
@@ -104,8 +106,7 @@ def build_hf_panel() -> pd.DataFrame:
             "地缘因子": politics,
         }
     )
-    panel = panel[panel.index >= pd.Timestamp(SAMPLE_START)]
-    return panel[FACTOR_LABELS]
+    return panel
 
 
 def build_alert_panel() -> pd.DataFrame:
@@ -139,10 +140,10 @@ def build_alert_panel() -> pd.DataFrame:
             "汇率因子": exchange,
             "地缘因子": politics,
         }
-    )[FACTOR_LABELS].dropna(how="any")
+    ).dropna(how="any")
 
 
-def build_corr_payload(panel: pd.DataFrame, start: str, end: str) -> dict:
+def build_corr_payload(panel: pd.DataFrame, start: str, end: str, labels: list[str]) -> dict:
     subset = panel.loc[start:end].dropna(how="any")
     if len(subset) < 12:
         raise ValueError(f"有效样本不足: {start} ~ {end} 仅 {len(subset)} 周")
@@ -151,10 +152,10 @@ def build_corr_payload(panel: pd.DataFrame, start: str, end: str) -> dict:
     periods = common.index.strftime("%Y-%m-%d").tolist()
     series = {
         label: [None if pd.isna(v) else round(float(v), 6) for v in common[label].tolist()]
-        for label in FACTOR_LABELS
+        for label in labels
     }
     return {
-        "labels": FACTOR_LABELS,
+        "labels": labels,
         "periods": periods,
         "weeks": periods,
         "series": series,
@@ -224,7 +225,16 @@ def plot_corr_table(corr: pd.DataFrame, start: str, end: str, n_weeks: int) -> N
 
 
 def main() -> None:
+    cfg = load_panel_config()
+    hm = cfg["heatmap"]
+    labels = heatmap_factors(cfg)
+    sample_start = hm.get("hf_start") or SAMPLE_START
     panel = build_hf_panel()
+    missing = [f for f in labels if f not in panel.columns]
+    if missing:
+        raise ValueError("周频热力图缺少因子列: " + "、".join(missing))
+    panel = panel[labels]
+    panel = panel[panel.index >= pd.Timestamp(sample_start)]
     common = panel.dropna(how="any")
     start = common.index.min().strftime("%Y-%m-%d")
     end = common.index.max().strftime("%Y-%m-%d")
@@ -236,15 +246,18 @@ def main() -> None:
     corr = common.corr(method="pearson")
     corr.to_csv(OUTPUT_CORR, encoding="utf-8-sig", float_format="%.4f")
 
-    payload = build_corr_payload(panel, start, end)
+    payload = build_corr_payload(panel, start, end, labels)
     alert_panel = build_alert_panel()
+    alert_cols = [f for f in labels if f in alert_panel.columns]
     payload["alert_weeks"] = alert_panel.index.strftime("%Y-%m-%d").tolist()
     payload["alert_series"] = {
         label: [round(float(v), 6) for v in alert_panel[label].tolist()]
-        for label in FACTOR_LABELS
+        for label in alert_cols
     }
     payload["default_start"] = payload["start"]
     payload["default_end"] = payload["end"]
+    payload["fixed_start"] = sample_start
+    payload["panel_config"] = {"heatmap": hm, "alerts": cfg["alerts"]}
     OUTPUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     plot_corr_table(corr, start, end, len(common))

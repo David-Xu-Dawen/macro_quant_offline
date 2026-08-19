@@ -16,6 +16,16 @@ venv/
 .cursor/
 .vscode/
 *.log
+.~*
+
+# 旧工程副本和重复 Wind 表，不要上传
+macro_quant 0/
+exchange/macro_quant/
+data.xlsx
+data_new.xlsx
+excel.xlsx
+factor exposure/factor_exposure_custom.csv
+factor exposure/factor_exposure_custom.json
 
 # 模型运行时数据（由 data.csv 重建）
 model prediction/data/
